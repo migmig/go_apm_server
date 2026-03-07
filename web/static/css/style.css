@@ -190,6 +190,8 @@ th {
 
 tr:hover { background: var(--bg-hover); }
 tr.clickable { cursor: pointer; }
+tbody tr:nth-child(even) { background-color: var(--bg-tertiary); }
+tbody tr:hover { background-color: var(--bg-hover); }
 
 /* Status badges */
 .badge {
@@ -382,6 +384,9 @@ tr.clickable { cursor: pointer; }
     text-align: center;
     padding: 48px 24px;
     color: var(--text-muted);
+    background: var(--bg-secondary);
+    border-radius: 8px;
+    border: 1px dashed var(--border);
 }
 
 .empty-state h3 {
@@ -422,3 +427,26 @@ tr.clickable { cursor: pointer; }
 }
 
 .back-link:hover { text-decoration: underline; }
+
+/* Responsive */
+@media (max-width: 768px) {
+    .layout {
+        flex-direction: column;
+    }
+
+    .sidebar {
+        position: relative;
+        width: 100%;
+        border-right: none;
+        border-bottom: 1px solid var(--border);
+    }
+
+    .nav-links {
+        display: flex;
+        overflow-x: auto;
+    }
+
+    .content {
+        margin-left: 0;
+    }
+}
