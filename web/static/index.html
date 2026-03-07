@@ -1,0 +1,33 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Go APM Server</title>
+    <link rel="stylesheet" href="/static/css/style.css">
+</head>
+<body>
+    <div class="layout">
+        <nav class="sidebar">
+            <div class="sidebar-header">
+                <h1>APM</h1>
+            </div>
+            <ul class="nav-links">
+                <li><a href="#/" class="nav-link active" data-page="dashboard">Dashboard</a></li>
+                <li><a href="#/traces" class="nav-link" data-page="traces">Traces</a></li>
+                <li><a href="#/logs" class="nav-link" data-page="logs">Logs</a></li>
+                <li><a href="#/metrics" class="nav-link" data-page="metrics">Metrics</a></li>
+            </ul>
+        </nav>
+        <main class="content" id="content">
+        </main>
+    </div>
+
+    <script src="/static/js/app.js"></script>
+    <script src="/static/js/dashboard.js"></script>
+    <script src="/static/js/traces.js"></script>
+    <script src="/static/js/trace-detail.js"></script>
+    <script src="/static/js/logs.js"></script>
+    <script src="/static/js/metrics.js"></script>
+</body>
+</html>
