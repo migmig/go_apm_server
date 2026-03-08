@@ -747,11 +747,15 @@ func (s *SQLiteStorage) GetServices(ctx context.Context) ([]ServiceInfo, error) 
 			sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
 
 			p95Idx := int(math.Ceil(float64(len(durations))*0.95)) - 1
-			if p95Idx < 0 { p95Idx = 0 }
+			if p95Idx < 0 {
+				p95Idx = 0
+			}
 			svc.P95Latency = float64(durations[p95Idx]) / 1e6
 
 			p99Idx := int(math.Ceil(float64(len(durations))*0.99)) - 1
-			if p99Idx < 0 { p99Idx = 0 }
+			if p99Idx < 0 {
+				p99Idx = 0
+			}
 			svc.P99Latency = float64(durations[p99Idx]) / 1e6
 		}
 
