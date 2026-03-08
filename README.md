@@ -5,24 +5,25 @@ A lightweight Application Performance Monitoring (APM) server written in Go. It 
 ## Key Features
 
 - **OTLP Endpoints:** Supports OpenTelemetry Protocol (OTLP) via gRPC (`:4317`) and HTTP (`:4318`).
-- **Local Storage:** Uses CGO-free SQLite for lightweight, reliable local data storage for traces, metrics, and logs.
-- **Built-in Web UI:** Embedded Single Page Application (SPA) dashboard for visualizing traces (waterfall charts), metrics (time-series charts), and logs (searchable streams).
+- **High Performance Storage:** Uses CGO-free SQLite with WAL mode, JSON1 extensions, and async batch processing (`Memory Buffer & Batcher`) for high throughput.
+- **Time-partitioned Database:** Implements a daily SQLite DB file partitioning strategy for zero-overhead TTL cleanup and anti-fragmentation.
+- **Built-in Web UI:** Embedded Vite-based Single Page Application (SPA) dashboard for visualizing traces (waterfall charts), metrics (time-series charts), and logs (searchable streams).
 - **Single Binary:** Compiles into a single binary with zero external dependencies, including the embedded frontend.
+- **Self-Observability:** Exposes Prometheus metrics via `GET /metrics` for internal monitoring.
 - **Lightweight:** Designed to use under 100MB of memory for standard workloads.
-- **Data Retention:** Configurable TTL for automatic data cleanup.
 
 ## Architecture & Tech Stack
 
 ```text
-[OTel Agent/SDK] --OTLP gRPC/HTTP--> [Receiver] --> [Processor] --> [Storage]
-                                                                        |
-                                                        [Web UI] <-- [API Server]
+[OTel Agent/SDK] --OTLP gRPC/HTTP--> [Receiver] --> [Processor (Memory Buffer & Batcher)] --> [Storage (Time-partitioned SQLite)]
+                                                                                                          |
+                                                                         [Web UI] <-- [API Server / Metrics]
 ```
 
 - **Language:** Go 1.22+
-- **OTLP Receiver:** OTLP protobuf and JSON support over gRPC (`google.golang.org/grpc`) and HTTP.
-- **Storage:** SQLite (`modernc.org/sqlite` - CGO-free)
-- **Web UI:** HTML/CSS/Vanilla JS (Go `embed` to include in binary)
+- **OTLP Parsing:** Leverages OpenTelemetry Collector's `go.opentelemetry.io/collector/pdata` for robust and efficient payload parsing.
+- **Storage:** SQLite (`modernc.org/sqlite` - CGO-free, WAL mode, daily partitioning)
+- **Web UI:** Vite + (React/Vue/Svelte), compiled to static assets and bundled via Go `embed`.
 - **Routing:** Go 1.22 enhanced HTTP routing
 
 ## Getting Started
@@ -92,6 +93,7 @@ The server exposes a REST API on port `8080`:
 - `GET /api/logs` - Search logs (filters: service, severity, search term)
 - `GET /api/stats` - Summary statistics for the dashboard
 - `GET /health` - Health check
+- `GET /metrics` - Exposes Prometheus-formatted internal server and pipeline metrics
 
 ## Accessing the Web UI
 
