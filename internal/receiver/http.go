@@ -5,6 +5,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"net"
 	"net/http"
 	"strings"
 	"time"
@@ -32,6 +33,15 @@ func NewHTTP(port int, proc *processor.Processor) *HTTPReceiver {
 }
 
 func (r *HTTPReceiver) Start() error {
+	listener, err := net.Listen("tcp", fmt.Sprintf(":%d", r.port))
+	if err != nil {
+		return fmt.Errorf("http listen: %w", err)
+	}
+
+	if r.port == 0 {
+		r.port = listener.Addr().(*net.TCPAddr).Port
+	}
+
 	mux := http.NewServeMux()
 	mux.HandleFunc("POST /v1/traces", r.handleTraces)
 	mux.HandleFunc("POST /v1/metrics", r.handleMetrics)
@@ -45,7 +55,7 @@ func (r *HTTPReceiver) Start() error {
 	}
 
 	log.Printf("OTLP HTTP receiver listening on :%d", r.port)
-	return r.server.ListenAndServe()
+	return r.server.Serve(listener)
 }
 
 func (r *HTTPReceiver) Stop(ctx context.Context) error {
@@ -53,6 +63,10 @@ func (r *HTTPReceiver) Stop(ctx context.Context) error {
 		return r.server.Shutdown(ctx)
 	}
 	return nil
+}
+
+func (r *HTTPReceiver) Port() int {
+	return r.port
 }
 
 func (r *HTTPReceiver) handleTraces(w http.ResponseWriter, req *http.Request) {
