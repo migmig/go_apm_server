@@ -1,0 +1,33 @@
+# Git history - may contain secrets or sensitive data in commit history
+.git/
+.gitignore
+
+# Compiled artifacts - rebuilt inside Docker stages
+apm-server
+web/dist/
+web/node_modules/
+
+# Database files - runtime data, must not be baked into the image
+data/
+*.db
+*.db-shm
+*.db-wal
+
+# Test files - not needed in production image
+tests/
+
+# Documentation
+*.md
+
+# Editor and IDE configuration
+.idea/
+.vscode/
+*.swp
+*.swo
+
+# Environment and secrets files
+.env
+.env.*
+
+# Plan files
+*.plan
