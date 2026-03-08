@@ -4,38 +4,38 @@
 
 - [x] **T-001**: Go 모듈 초기화 (`go mod init`)
 - [x] **T-002**: 디렉토리 구조 생성 (`cmd/`, `internal/`, `web/`, `configs/`)
-- [ ] **T-003**: `internal/config/config.go` - Config 구조체 정의 및 YAML/환경변수/기본값 로딩 (Processor 옵션 포함)
+- [x] **T-003**: `internal/config/config.go` - Config 구조체 정의 및 YAML/환경변수/기본값 로딩 (Processor 옵션 포함)
 - [x] **T-004**: `configs/config.yaml` - 기본 설정 파일 작성
 - [x] **T-005**: `internal/storage/models.go` - 데이터 모델 구조체 정의 (Span, Metric, LogRecord, 필터 등)
-- [ ] **T-006**: `internal/storage/migrations.go` - SQLite 스키마 DDL (JSON1 대응 및 일별 파티셔닝 구조 고려) 및 마이그레이션 함수
-- [ ] **T-007**: `internal/storage/sqlite.go` - 일별 DB 파일(`apm-YYYY-MM-DD.db`) 관리 구조체, SQLite 연결, WAL 설정 (`PRAGMA journal_mode=WAL`)
+- [x] **T-006**: `internal/storage/migrations.go` - SQLite 스키마 DDL (JSON1 대응 및 일별 파티셔닝 구조 고려) 및 마이그레이션 함수
+- [x] **T-007**: `internal/storage/sqlite.go` - 일별 DB 파일(`apm-YYYY-MM-DD.db`) 관리 구조체, SQLite 연결, WAL 설정 (`PRAGMA journal_mode=WAL`)
 - [x] **T-008**: `cmd/server/main.go` - 엔트리포인트 스켈레톤 (config 로드 → storage 초기화 → 시그널 대기)
 
 ## Phase 2: OTLP 수신기 및 프로세서
 
-- [ ] **T-009**: OTLP 파싱을 위한 `go.opentelemetry.io/collector/pdata` 의존성 추가
-- [ ] **T-010**: `internal/processor/processor.go` - Memory Buffer & Batcher (Channel/Ring Buffer 기반 배치 처리기)
-- [ ] **T-011**: `internal/processor/pdata_parser.go` - `pdata` 활용 OTLP 데이터 파싱 및 내부 모델 변환 함수
+- [x] **T-009**: OTLP 파싱을 위한 `go.opentelemetry.io/collector/pdata` 의존성 추가
+- [x] **T-010**: `internal/processor/processor.go` - Memory Buffer & Batcher (Channel/Ring Buffer 기반 배치 처리기)
+- [x] **T-011**: `internal/processor/pdata_parser.go` - `pdata` 활용 OTLP 데이터 파싱 및 내부 모델 변환 함수
   - `TracesUnmarshaler` 등을 이용한 바이트 파싱
   - `service.name` 추출, trace/span ID hex 변환, JSON attributes 텍스트 변환
-- [ ] **T-012**: `internal/receiver/grpc.go` - gRPC 서버 구현 (수신 데이터를 Memory Buffer로 전달)
-- [ ] **T-013**: `internal/receiver/http.go` - HTTP 서버 구현 (수신 데이터를 Memory Buffer로 전달)
-- [ ] **T-014**: main.go에 gRPC/HTTP receiver 및 Processor 연결 및 동시 실행
+- [x] **T-012**: `internal/receiver/grpc.go` - gRPC 서버 구현 (수신 데이터를 Memory Buffer로 전달)
+- [x] **T-013**: `internal/receiver/http.go` - HTTP 서버 구현 (수신 데이터를 Memory Buffer로 전달)
+- [x] **T-014**: main.go에 gRPC/HTTP receiver 및 Processor 연결 및 동시 실행
 
 ## Phase 3: 스토리지 구현
 
-- [ ] **T-015**: `storage/sqlite.go` - 일별 DB(Time-partitioned)에 따른 동적 DB 선택/라우팅
-- [ ] **T-016**: `storage/sqlite.go` - InsertSpans 구현 (Bulk INSERT)
-- [ ] **T-017**: `storage/sqlite.go` - InsertMetrics 구현 (Bulk INSERT)
-- [ ] **T-018**: `storage/sqlite.go` - InsertLogs 구현 (Bulk INSERT)
-- [ ] **T-019**: `storage/sqlite.go` - QueryTraces 구현 (필터 적용, `json_extract()` 활용, 여러 일별 DB 쿼리 병합 지원)
-- [ ] **T-020**: `storage/sqlite.go` - GetTraceByID 구현
-- [ ] **T-021**: `storage/sqlite.go` - QueryMetrics 구현
-- [ ] **T-022**: `storage/sqlite.go` - QueryLogs 구현 (body 검색 및 `json_extract()` 필터 적용)
-- [ ] **T-023**: `storage/sqlite.go` - GetServices 구현
-- [ ] **T-024**: `storage/sqlite.go` - GetStats 구현
-- [ ] **T-025**: `storage/sqlite.go` - `DeleteOldPartitions` 구현 (`os.Remove()` 기반 일별 DB 파일 삭제 로직)
-- [ ] **T-026**: Retention worker 고루틴 (오래된 DB 파티션 주기적 체크 및 삭제)
+- [x] **T-015**: `storage/sqlite.go` - 일별 DB(Time-partitioned)에 따른 동적 DB 선택/라우팅
+- [x] **T-016**: `storage/sqlite.go` - InsertSpans 구현 (Bulk INSERT)
+- [x] **T-017**: `storage/sqlite.go` - InsertMetrics 구현 (Bulk INSERT)
+- [x] **T-018**: `storage/sqlite.go` - InsertLogs 구현 (Bulk INSERT)
+- [x] **T-019**: `storage/sqlite.go` - QueryTraces 구현 (필터 적용, `json_extract()` 활용, 여러 일별 DB 쿼리 병합 지원)
+- [x] **T-020**: `storage/sqlite.go` - GetTraceByID 구현
+- [x] **T-021**: `storage/sqlite.go` - QueryMetrics 구현
+- [x] **T-022**: `storage/sqlite.go` - QueryLogs 구현 (body 검색 및 `json_extract()` 필터 적용)
+- [x] **T-023**: `storage/sqlite.go` - GetServices 구현
+- [x] **T-024**: `storage/sqlite.go` - GetStats 구현
+- [x] **T-025**: `storage/sqlite.go` - `DeleteOldPartitions` 구현 (`os.Remove()` 기반 일별 DB 파일 삭제 로직)
+- [x] **T-026**: Retention worker 고루틴 (오래된 DB 파티션 주기적 체크 및 삭제)
 
 ## Phase 4: REST API & 관측성
 
@@ -48,8 +48,8 @@
 - [x] **T-033**: `GET /api/logs` 핸들러
 - [x] **T-034**: `GET /api/stats` 핸들러
 - [x] **T-035**: `GET /health` 핸들러
-- [ ] **T-036**: `GET /metrics` 핸들러 (Prometheus 포맷의 Go 런타임 및 수신 파이프라인 지표 노출)
-- [ ] **T-037**: main.go에 API 서버 연결
+- [x] **T-036**: `GET /metrics` 핸들러 (Prometheus 포맷의 Go 런타임 및 수신 파이프라인 지표 노출)
+- [x] **T-037**: main.go에 API 서버 연결
 
 ## Phase 5: Web UI (Vite SPA)
 
@@ -65,7 +65,7 @@
 
 ## Phase 6: 운영 기능
 
-- [ ] **T-047**: Graceful shutdown 구현 (리스너 닫기 → 요청 대기 → Batch Processor flush → Storage 닫기)
+- [x] **T-047**: Graceful shutdown 구현 (리스너 닫기 → 요청 대기 → Batch Processor flush → Storage 닫기)
 - [x] **T-048**: `configs/config.yaml` 완성 및 CLI `--config` 플래그
 - [ ] **T-049**: Dockerfile 작성 (프론트엔드 빌드(Node) + Go 빌드 멀티스테이지)
 - [ ] **T-050**: Makefile 업데이트 (`build`, `run`, `docker-build`, `build-web` 추가)

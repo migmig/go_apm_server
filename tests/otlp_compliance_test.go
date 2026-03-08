@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/migmig/go_apm_server/internal/api"
+	"github.com/migmig/go_apm_server/internal/config"
 	"github.com/migmig/go_apm_server/internal/processor"
 	"github.com/migmig/go_apm_server/internal/receiver"
 	"github.com/migmig/go_apm_server/internal/storage"
@@ -50,18 +51,27 @@ func setupTestEnvironment(t *testing.T) *testServer {
 		t.Fatalf("failed to init storage: %v", err)
 	}
 
-	proc := processor.New(store)
+	procCfg := config.ProcessorConfig{
+		BatchSize:     10,
+		FlushInterval: "1s",
+		QueueSize:     100,
+		DropOnFull:    false,
+	}
+	proc := processor.New(procCfg, store)
+	proc.Start(ctx)
 
-	grpcRecv := receiver.NewGRPC(0, proc)
+	recvCfg := config.ReceiverConfig{}
+
+	grpcRecv := receiver.NewGRPCReceiver(recvCfg, proc)
 	go func() {
-		if err := grpcRecv.Start(); err != nil {
+		if err := grpcRecv.Start(ctx, 0); err != nil {
 			fmt.Fprintf(os.Stderr, "gRPC receiver error: %v\n", err)
 		}
 	}()
 
-	httpRecv := receiver.NewHTTP(0, proc)
+	httpRecv := receiver.NewHTTPReceiver(recvCfg, proc)
 	go func() {
-		if err := httpRecv.Start(); err != nil && err != http.ErrServerClosed {
+		if err := httpRecv.Start(ctx, 0); err != nil {
 			fmt.Fprintf(os.Stderr, "HTTP receiver error: %v\n", err)
 		}
 	}()

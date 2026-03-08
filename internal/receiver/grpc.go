@@ -3,101 +3,94 @@ package receiver
 import (
 	"context"
 	"fmt"
-	"log"
 	"net"
 
-	collogspb "go.opentelemetry.io/proto/otlp/collector/logs/v1"
-	colmetricspb "go.opentelemetry.io/proto/otlp/collector/metrics/v1"
-	coltracepb "go.opentelemetry.io/proto/otlp/collector/trace/v1"
+	"go.opentelemetry.io/collector/pdata/plog/plogotlp"
+	"go.opentelemetry.io/collector/pdata/pmetric/pmetricotlp"
+	"go.opentelemetry.io/collector/pdata/ptrace/ptraceotlp"
 	"google.golang.org/grpc"
 
+	"github.com/migmig/go_apm_server/internal/config"
 	"github.com/migmig/go_apm_server/internal/processor"
 )
 
 type GRPCReceiver struct {
-	proc   *processor.Processor
 	server *grpc.Server
+	proc   *processor.Processor
 	port   int
 }
 
-func NewGRPC(port int, proc *processor.Processor) *GRPCReceiver {
-	return &GRPCReceiver{
-		proc: proc,
-		port: port,
-	}
+func NewGRPCReceiver(cfg config.ReceiverConfig, proc *processor.Processor) *GRPCReceiver {
+	s := grpc.NewServer()
+	r := &GRPCReceiver{server: s, proc: proc}
+
+	ptraceotlp.RegisterGRPCServer(s, &traceServer{proc: proc})
+	pmetricotlp.RegisterGRPCServer(s, &metricServer{proc: proc})
+	plogotlp.RegisterGRPCServer(s, &logServer{proc: proc})
+
+	return r
 }
 
-func (r *GRPCReceiver) Start() error {
-	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", r.port))
+var _port int
+
+func (r *GRPCReceiver) Start(ctx context.Context, port int) error {
+	lis, err := net.Listen("tcp", fmt.Sprintf(":%d", port))
 	if err != nil {
-		return fmt.Errorf("grpc listen: %w", err)
+		return err
 	}
+	r.port = lis.Addr().(*net.TCPAddr).Port
 
-	// Update port with actual port assigned if port was 0
-	if r.port == 0 {
-		r.port = lis.Addr().(*net.TCPAddr).Port
-	}
-
-	r.server = grpc.NewServer()
-	coltracepb.RegisterTraceServiceServer(r.server, &traceService{proc: r.proc})
-	colmetricspb.RegisterMetricsServiceServer(r.server, &metricsService{proc: r.proc})
-	collogspb.RegisterLogsServiceServer(r.server, &logsService{proc: r.proc})
-
-	log.Printf("OTLP gRPC receiver listening on :%d", r.port)
-	return r.server.Serve(lis)
-}
-
-func (r *GRPCReceiver) Stop() {
-	if r.server != nil {
-		r.server.GracefulStop()
-	}
+	go func() {
+		if err := r.server.Serve(lis); err != nil {
+			fmt.Printf("grpc server error: %v\n", err)
+		}
+	}()
+	return nil
 }
 
 func (r *GRPCReceiver) Port() int {
 	return r.port
 }
 
-// --- Trace Service ---
+func (r *GRPCReceiver) Stop() {
+	r.server.GracefulStop()
+}
 
-type traceService struct {
-	coltracepb.UnimplementedTraceServiceServer
+type traceServer struct {
+	ptraceotlp.UnimplementedGRPCServer
 	proc *processor.Processor
 }
 
-func (s *traceService) Export(ctx context.Context, req *coltracepb.ExportTraceServiceRequest) (*coltracepb.ExportTraceServiceResponse, error) {
-	if err := s.proc.ProcessTraces(ctx, req.ResourceSpans); err != nil {
-		log.Printf("error processing traces: %v", err)
-		return nil, err
+func (s *traceServer) Export(ctx context.Context, req ptraceotlp.ExportRequest) (ptraceotlp.ExportResponse, error) {
+	spans := processor.ParseTraces(req.Traces())
+	if err := s.proc.PushSpans(ctx, spans); err != nil {
+		return ptraceotlp.NewExportResponse(), err
 	}
-	return &coltracepb.ExportTraceServiceResponse{}, nil
+	return ptraceotlp.NewExportResponse(), nil
 }
 
-// --- Metrics Service ---
-
-type metricsService struct {
-	colmetricspb.UnimplementedMetricsServiceServer
+type metricServer struct {
+	pmetricotlp.UnimplementedGRPCServer
 	proc *processor.Processor
 }
 
-func (s *metricsService) Export(ctx context.Context, req *colmetricspb.ExportMetricsServiceRequest) (*colmetricspb.ExportMetricsServiceResponse, error) {
-	if err := s.proc.ProcessMetrics(ctx, req.ResourceMetrics); err != nil {
-		log.Printf("error processing metrics: %v", err)
-		return nil, err
+func (s *metricServer) Export(ctx context.Context, req pmetricotlp.ExportRequest) (pmetricotlp.ExportResponse, error) {
+	metrics := processor.ParseMetrics(req.Metrics())
+	if err := s.proc.PushMetrics(ctx, metrics); err != nil {
+		return pmetricotlp.NewExportResponse(), err
 	}
-	return &colmetricspb.ExportMetricsServiceResponse{}, nil
+	return pmetricotlp.NewExportResponse(), nil
 }
 
-// --- Logs Service ---
-
-type logsService struct {
-	collogspb.UnimplementedLogsServiceServer
+type logServer struct {
+	plogotlp.UnimplementedGRPCServer
 	proc *processor.Processor
 }
 
-func (s *logsService) Export(ctx context.Context, req *collogspb.ExportLogsServiceRequest) (*collogspb.ExportLogsServiceResponse, error) {
-	if err := s.proc.ProcessLogs(ctx, req.ResourceLogs); err != nil {
-		log.Printf("error processing logs: %v", err)
-		return nil, err
+func (s *logServer) Export(ctx context.Context, req plogotlp.ExportRequest) (plogotlp.ExportResponse, error) {
+	logs := processor.ParseLogs(req.Logs())
+	if err := s.proc.PushLogs(ctx, logs); err != nil {
+		return plogotlp.NewExportResponse(), err
 	}
-	return &collogspb.ExportLogsServiceResponse{}, nil
+	return plogotlp.NewExportResponse(), nil
 }

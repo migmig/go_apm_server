@@ -30,8 +30,7 @@ func StartRetentionWorker(ctx context.Context, store Storage, retentionDays int)
 }
 
 func runRetention(ctx context.Context, store Storage, retentionDays int) {
-	cutoff := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour).UnixNano()
-	deleted, err := store.DeleteOlderThan(ctx, cutoff)
+	deleted, err := store.DeleteOldPartitions(ctx, retentionDays)
 	if err != nil {
 		log.Printf("retention cleanup error: %v", err)
 		return

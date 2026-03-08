@@ -8,12 +8,14 @@ import (
 
 	"github.com/migmig/go_apm_server/internal/storage"
 	"github.com/migmig/go_apm_server/web"
+	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
 func NewServer(port int, store storage.Storage) *http.Server {
 	h := NewHandler(store)
 
 	mux := http.NewServeMux()
+	mux.Handle("GET /metrics", promhttp.Handler())
 	mux.HandleFunc("GET /health", h.HandleHealth)
 	mux.HandleFunc("GET /api/services", h.HandleGetServices)
 	mux.HandleFunc("GET /api/traces", h.HandleGetTraces)

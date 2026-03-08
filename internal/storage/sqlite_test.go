@@ -2,7 +2,6 @@ package storage
 
 import (
 	"context"
-	"os"
 	"path/filepath"
 	"testing"
 	"time"
@@ -43,7 +42,7 @@ func TestInsertAndQuerySpans(t *testing.T) {
 			ServiceName: "svc-a", SpanName: "POST /orders", SpanKind: 2,
 			StartTime: 2000000000, EndTime: 2200000000, DurationNs: 200000000,
 			StatusCode: 2, StatusMessage: "internal error",
-			Attributes: map[string]any{"http.method": "POST"},
+			Attributes:         map[string]any{"http.method": "POST"},
 			ResourceAttributes: map[string]any{"service.name": "svc-a"},
 		},
 	}
@@ -249,7 +248,7 @@ func TestGetStats(t *testing.T) {
 	}
 }
 
-func TestDeleteOlderThan(t *testing.T) {
+func TestDeleteOldPartitions(t *testing.T) {
 	db := testDB(t)
 	ctx := context.Background()
 
@@ -266,13 +265,12 @@ func TestDeleteOlderThan(t *testing.T) {
 		{TraceID: "t2", SpanID: "s2", ServiceName: "svc", SpanName: "op2", StartTime: now, EndTime: now + 1000, DurationNs: 1000, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
 	})
 
-	cutoff := time.Now().Add(-24 * time.Hour).UnixNano() // 1 day ago
-	deleted, err := db.DeleteOlderThan(ctx, cutoff)
+	// Set retention to 1 day, it should not delete anything because both were inserted "now" (created_at is now)
+	deleted, err := db.DeleteOldPartitions(ctx, 1)
 	if err != nil {
 		t.Fatalf("delete: %v", err)
 	}
 	// Both spans have created_at = now (set by InsertSpans), so neither should be deleted
-	// The old start_time doesn't affect created_at
 	if deleted != 0 {
 		t.Logf("deleted %d (both have recent created_at)", deleted)
 	}
@@ -282,6 +280,4 @@ func TestDeleteOlderThan(t *testing.T) {
 	if total < 1 {
 		t.Errorf("expected at least 1 trace remaining, got %d", total)
 	}
-
-	_ = os.RemoveAll("")
 }

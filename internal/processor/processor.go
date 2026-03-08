@@ -2,266 +2,208 @@ package processor
 
 import (
 	"context"
-	"encoding/hex"
 	"fmt"
+	"sync"
+	"time"
 
-	commonpb "go.opentelemetry.io/proto/otlp/common/v1"
-	logspb "go.opentelemetry.io/proto/otlp/logs/v1"
-	metricspb "go.opentelemetry.io/proto/otlp/metrics/v1"
-	tracepb "go.opentelemetry.io/proto/otlp/trace/v1"
-
+	"github.com/migmig/go_apm_server/internal/config"
 	"github.com/migmig/go_apm_server/internal/storage"
 )
 
 type Processor struct {
-	store storage.Storage
+	cfg       config.ProcessorConfig
+	store     storage.Storage
+	spansCh   chan storage.Span
+	metricsCh chan storage.Metric
+	logsCh    chan storage.LogRecord
+	stopCh    chan struct{}
+	wg        sync.WaitGroup
 }
 
-func New(store storage.Storage) *Processor {
-	return &Processor{store: store}
+func New(cfg config.ProcessorConfig, store storage.Storage) *Processor {
+	return &Processor{
+		cfg:       cfg,
+		store:     store,
+		spansCh:   make(chan storage.Span, cfg.QueueSize),
+		metricsCh: make(chan storage.Metric, cfg.QueueSize),
+		logsCh:    make(chan storage.LogRecord, cfg.QueueSize),
+		stopCh:    make(chan struct{}),
+	}
 }
 
-// ProcessTraces converts OTLP ResourceSpans to internal Span models and stores them.
-func (p *Processor) ProcessTraces(ctx context.Context, resourceSpans []*tracepb.ResourceSpans) error {
-	var spans []storage.Span
+func (p *Processor) Start(ctx context.Context) {
+	flushInterval, err := time.ParseDuration(p.cfg.FlushInterval)
+	if err != nil {
+		flushInterval = 2 * time.Second
+	}
 
-	for _, rs := range resourceSpans {
-		serviceName := extractServiceName(rs.Resource)
-		resAttrs := convertAttributes(rs.Resource.GetAttributes())
+	p.wg.Add(1)
+	go func() {
+		defer p.wg.Done()
+		p.batchWorker(ctx, flushInterval)
+	}()
+}
 
-		for _, ss := range rs.ScopeSpans {
-			for _, s := range ss.Spans {
-				span := storage.Span{
-					TraceID:            hexEncode(s.TraceId),
-					SpanID:             hexEncode(s.SpanId),
-					ParentSpanID:       hexEncode(s.ParentSpanId),
-					ServiceName:        serviceName,
-					SpanName:           s.Name,
-					SpanKind:           int32(s.Kind),
-					StartTime:          int64(s.StartTimeUnixNano),
-					EndTime:            int64(s.EndTimeUnixNano),
-					DurationNs:         int64(s.EndTimeUnixNano) - int64(s.StartTimeUnixNano),
-					StatusCode:         int32(s.Status.GetCode()),
-					StatusMessage:      s.Status.GetMessage(),
-					Attributes:         convertAttributes(s.Attributes),
-					Events:             convertEvents(s.Events),
-					ResourceAttributes: resAttrs,
+func (p *Processor) Stop() {
+	close(p.stopCh)
+	p.wg.Wait()
+}
+
+func (p *Processor) PushSpans(ctx context.Context, spans []storage.Span) error {
+	for _, sp := range spans {
+		if p.cfg.DropOnFull {
+			select {
+			case p.spansCh <- sp:
+			default:
+				// Drop
+			}
+		} else {
+			select {
+			case p.spansCh <- sp:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+	return nil
+}
+
+func (p *Processor) PushMetrics(ctx context.Context, metrics []storage.Metric) error {
+	for _, m := range metrics {
+		if p.cfg.DropOnFull {
+			select {
+			case p.metricsCh <- m:
+			default:
+			}
+		} else {
+			select {
+			case p.metricsCh <- m:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+	return nil
+}
+
+func (p *Processor) PushLogs(ctx context.Context, logs []storage.LogRecord) error {
+	for _, l := range logs {
+		if p.cfg.DropOnFull {
+			select {
+			case p.logsCh <- l:
+			default:
+			}
+		} else {
+			select {
+			case p.logsCh <- l:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+	return nil
+}
+
+func (p *Processor) drainAndFlush(ctx context.Context, spans *[]storage.Span, metrics *[]storage.Metric, logs *[]storage.LogRecord) {
+	// Drain spans
+loopSpans:
+	for {
+		select {
+		case sp := <-p.spansCh:
+			*spans = append(*spans, sp)
+		default:
+			break loopSpans
+		}
+	}
+	// Drain metrics
+loopMetrics:
+	for {
+		select {
+		case m := <-p.metricsCh:
+			*metrics = append(*metrics, m)
+		default:
+			break loopMetrics
+		}
+	}
+	// Drain logs
+loopLogs:
+	for {
+		select {
+		case l := <-p.logsCh:
+			*logs = append(*logs, l)
+		default:
+			break loopLogs
+		}
+	}
+}
+
+func (p *Processor) batchWorker(ctx context.Context, interval time.Duration) {
+	ticker := time.NewTicker(interval)
+	defer ticker.Stop()
+
+	var spansBatch []storage.Span
+	var metricsBatch []storage.Metric
+	var logsBatch []storage.LogRecord
+
+	flush := func() {
+		if len(spansBatch) > 0 {
+			if err := p.store.InsertSpans(ctx, spansBatch); err != nil {
+				fmt.Printf("failed to flush spans: %v\n", err)
+			}
+			spansBatch = spansBatch[:0]
+		}
+		if len(metricsBatch) > 0 {
+			if err := p.store.InsertMetrics(ctx, metricsBatch); err != nil {
+				fmt.Printf("failed to flush metrics: %v\n", err)
+			}
+			metricsBatch = metricsBatch[:0]
+		}
+		if len(logsBatch) > 0 {
+			if err := p.store.InsertLogs(ctx, logsBatch); err != nil {
+				fmt.Printf("failed to flush logs: %v\n", err)
+			}
+			logsBatch = logsBatch[:0]
+		}
+	}
+
+	for {
+		select {
+		case <-p.stopCh:
+			// Drain channels before exiting
+			p.drainAndFlush(ctx, &spansBatch, &metricsBatch, &logsBatch)
+			flush()
+			return
+		case <-ctx.Done():
+			// Drain channels before exiting
+			p.drainAndFlush(ctx, &spansBatch, &metricsBatch, &logsBatch)
+			flush()
+			return
+		case sp := <-p.spansCh:
+			spansBatch = append(spansBatch, sp)
+			if len(spansBatch) >= p.cfg.BatchSize {
+				if err := p.store.InsertSpans(ctx, spansBatch); err != nil {
+					fmt.Printf("failed to flush spans: %v\n", err)
 				}
-				spans = append(spans, span)
+				spansBatch = spansBatch[:0]
 			}
-		}
-	}
-
-	if len(spans) == 0 {
-		return nil
-	}
-	return p.store.InsertSpans(ctx, spans)
-}
-
-// ProcessMetrics converts OTLP ResourceMetrics to internal Metric models and stores them.
-func (p *Processor) ProcessMetrics(ctx context.Context, resourceMetrics []*metricspb.ResourceMetrics) error {
-	var metrics []storage.Metric
-
-	for _, rm := range resourceMetrics {
-		serviceName := extractServiceName(rm.Resource)
-		resAttrs := convertAttributes(rm.Resource.GetAttributes())
-
-		for _, sm := range rm.ScopeMetrics {
-			for _, m := range sm.Metrics {
-				extracted := extractMetricDataPoints(m, serviceName, resAttrs)
-				metrics = append(metrics, extracted...)
-			}
-		}
-	}
-
-	if len(metrics) == 0 {
-		return nil
-	}
-	return p.store.InsertMetrics(ctx, metrics)
-}
-
-// ProcessLogs converts OTLP ResourceLogs to internal LogRecord models and stores them.
-func (p *Processor) ProcessLogs(ctx context.Context, resourceLogs []*logspb.ResourceLogs) error {
-	var logs []storage.LogRecord
-
-	for _, rl := range resourceLogs {
-		serviceName := extractServiceName(rl.Resource)
-		resAttrs := convertAttributes(rl.Resource.GetAttributes())
-
-		for _, sl := range rl.ScopeLogs {
-			for _, lr := range sl.LogRecords {
-				rec := storage.LogRecord{
-					TraceID:            hexEncode(lr.TraceId),
-					SpanID:             hexEncode(lr.SpanId),
-					ServiceName:        serviceName,
-					SeverityNumber:     int32(lr.SeverityNumber),
-					SeverityText:       lr.SeverityText,
-					Body:               anyValueToString(lr.Body),
-					Attributes:         convertAttributes(lr.Attributes),
-					ResourceAttributes: resAttrs,
-					Timestamp:          int64(lr.TimeUnixNano),
+		case m := <-p.metricsCh:
+			metricsBatch = append(metricsBatch, m)
+			if len(metricsBatch) >= p.cfg.BatchSize {
+				if err := p.store.InsertMetrics(ctx, metricsBatch); err != nil {
+					fmt.Printf("failed to flush metrics: %v\n", err)
 				}
-				logs = append(logs, rec)
+				metricsBatch = metricsBatch[:0]
 			}
-		}
-	}
-
-	if len(logs) == 0 {
-		return nil
-	}
-	return p.store.InsertLogs(ctx, logs)
-}
-
-// --- helpers ---
-
-func extractServiceName(res interface{ GetAttributes() []*commonpb.KeyValue }) string {
-	if res == nil {
-		return "unknown"
-	}
-	for _, kv := range res.GetAttributes() {
-		if kv.Key == "service.name" {
-			return anyValueToString(kv.Value)
-		}
-	}
-	return "unknown"
-}
-
-func convertAttributes(kvs []*commonpb.KeyValue) map[string]any {
-	m := make(map[string]any, len(kvs))
-	for _, kv := range kvs {
-		m[kv.Key] = anyValueToAny(kv.Value)
-	}
-	return m
-}
-
-func anyValueToAny(v *commonpb.AnyValue) any {
-	if v == nil {
-		return nil
-	}
-	switch val := v.Value.(type) {
-	case *commonpb.AnyValue_StringValue:
-		return val.StringValue
-	case *commonpb.AnyValue_IntValue:
-		return val.IntValue
-	case *commonpb.AnyValue_DoubleValue:
-		return val.DoubleValue
-	case *commonpb.AnyValue_BoolValue:
-		return val.BoolValue
-	case *commonpb.AnyValue_ArrayValue:
-		arr := make([]any, 0, len(val.ArrayValue.Values))
-		for _, item := range val.ArrayValue.Values {
-			arr = append(arr, anyValueToAny(item))
-		}
-		return arr
-	case *commonpb.AnyValue_KvlistValue:
-		return convertAttributes(val.KvlistValue.Values)
-	case *commonpb.AnyValue_BytesValue:
-		return hex.EncodeToString(val.BytesValue)
-	default:
-		return fmt.Sprintf("%v", v)
-	}
-}
-
-func anyValueToString(v *commonpb.AnyValue) string {
-	if v == nil {
-		return ""
-	}
-	switch val := v.Value.(type) {
-	case *commonpb.AnyValue_StringValue:
-		return val.StringValue
-	default:
-		return fmt.Sprintf("%v", anyValueToAny(v))
-	}
-}
-
-func hexEncode(b []byte) string {
-	if len(b) == 0 {
-		return ""
-	}
-	return hex.EncodeToString(b)
-}
-
-func convertEvents(events []*tracepb.Span_Event) []storage.SpanEvent {
-	if len(events) == 0 {
-		return nil
-	}
-	result := make([]storage.SpanEvent, 0, len(events))
-	for _, e := range events {
-		result = append(result, storage.SpanEvent{
-			Name:       e.Name,
-			Timestamp:  int64(e.TimeUnixNano),
-			Attributes: convertAttributes(e.Attributes),
-		})
-	}
-	return result
-}
-
-func extractMetricDataPoints(m *metricspb.Metric, serviceName string, resAttrs map[string]any) []storage.Metric {
-	var metrics []storage.Metric
-
-	switch data := m.Data.(type) {
-	case *metricspb.Metric_Gauge:
-		for _, dp := range data.Gauge.DataPoints {
-			metrics = append(metrics, storage.Metric{
-				ServiceName:        serviceName,
-				MetricName:         m.Name,
-				MetricType:         1, // Gauge
-				Value:              numberValue(dp),
-				Attributes:         convertAttributes(dp.Attributes),
-				ResourceAttributes: resAttrs,
-				Timestamp:          int64(dp.TimeUnixNano),
-			})
-		}
-	case *metricspb.Metric_Sum:
-		for _, dp := range data.Sum.DataPoints {
-			metrics = append(metrics, storage.Metric{
-				ServiceName:        serviceName,
-				MetricName:         m.Name,
-				MetricType:         2, // Sum
-				Value:              numberValue(dp),
-				Attributes:         convertAttributes(dp.Attributes),
-				ResourceAttributes: resAttrs,
-				Timestamp:          int64(dp.TimeUnixNano),
-			})
-		}
-	case *metricspb.Metric_Histogram:
-		for _, dp := range data.Histogram.DataPoints {
-			buckets := make([]storage.HistogramBucket, 0, len(dp.ExplicitBounds))
-			for i, bound := range dp.ExplicitBounds {
-				var count uint64
-				if i < len(dp.BucketCounts) {
-					count = dp.BucketCounts[i]
+		case l := <-p.logsCh:
+			logsBatch = append(logsBatch, l)
+			if len(logsBatch) >= p.cfg.BatchSize {
+				if err := p.store.InsertLogs(ctx, logsBatch); err != nil {
+					fmt.Printf("failed to flush logs: %v\n", err)
 				}
-				buckets = append(buckets, storage.HistogramBucket{
-					UpperBound: bound,
-					Count:      count,
-				})
+				logsBatch = logsBatch[:0]
 			}
-			metrics = append(metrics, storage.Metric{
-				ServiceName:        serviceName,
-				MetricName:         m.Name,
-				MetricType:         3, // Histogram
-				HistogramCount:     int64(dp.GetCount()),
-				HistogramSum:       dp.GetSum(),
-				HistogramBuckets:   buckets,
-				Attributes:         convertAttributes(dp.Attributes),
-				ResourceAttributes: resAttrs,
-				Timestamp:          int64(dp.TimeUnixNano),
-			})
+		case <-ticker.C:
+			flush()
 		}
 	}
-
-	return metrics
-}
-
-type numberDataPoint interface {
-	GetAsDouble() float64
-	GetAsInt() int64
-}
-
-func numberValue(dp numberDataPoint) float64 {
-	if v := dp.GetAsDouble(); v != 0 {
-		return v
-	}
-	return float64(dp.GetAsInt())
 }
