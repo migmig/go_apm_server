@@ -276,8 +276,61 @@ func TestDeleteOldPartitions(t *testing.T) {
 	}
 
 	// Verify remaining
-	_, total, _ := db.QueryTraces(ctx, TraceFilter{Limit: 100})
-	if total < 1 {
-		t.Errorf("expected at least 1 trace remaining, got %d", total)
+	_, totalCount, _ := db.QueryTraces(ctx, TraceFilter{Limit: 100})
+	if totalCount < 1 {
+		t.Errorf("expected at least 1 trace remaining, got %d", totalCount)
+	}
+}
+
+func TestMultiDayPartitioning(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+
+	// 1. Prepare data for two different days
+	today := time.Now()
+	yesterday := today.Add(-24 * time.Hour)
+
+	spans := []Span{
+		{
+			TraceID: "trace-today", SpanID: "span1", ServiceName: "svc", SpanName: "op1",
+			StartTime: today.UnixNano(), EndTime: today.UnixNano() + 1000, DurationNs: 1000,
+			StatusCode: 1, Attributes: map[string]any{}, ResourceAttributes: map[string]any{},
+		},
+		{
+			TraceID: "trace-yesterday", SpanID: "span2", ServiceName: "svc", SpanName: "op2",
+			StartTime: yesterday.UnixNano(), EndTime: yesterday.UnixNano() + 1000, DurationNs: 1000,
+			StatusCode: 1, Attributes: map[string]any{}, ResourceAttributes: map[string]any{},
+		},
+	}
+
+	// 2. Insert spans
+	if err := db.InsertSpans(ctx, spans); err != nil {
+		t.Fatalf("failed to insert multi-day spans: %v", err)
+	}
+
+	// 3. Query all traces (should merge from both DBs)
+	traces, total, err := db.QueryTraces(ctx, TraceFilter{Limit: 100})
+	if err != nil {
+		t.Fatalf("failed to query multi-day traces: %v", err)
+	}
+
+	if total != 2 {
+		t.Errorf("expected 2 total traces from multiple days, got %d", total)
+	}
+
+	// 4. Verify specific trace exists
+	foundToday := false
+	foundYesterday := false
+	for _, tr := range traces {
+		if tr.TraceID == "trace-today" {
+			foundToday = true
+		}
+		if tr.TraceID == "trace-yesterday" {
+			foundYesterday = true
+		}
+	}
+
+	if !foundToday || !foundYesterday {
+		t.Errorf("missing traces from partitioning test: today=%v, yesterday=%v", foundToday, foundYesterday)
 	}
 }

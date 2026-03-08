@@ -2,8 +2,10 @@ package api
 
 import (
 	"fmt"
+	"io"
 	"io/fs"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/migmig/go_apm_server/internal/storage"
@@ -24,24 +26,43 @@ func NewServer(port int, store storage.Storage) *http.Server {
 	mux.HandleFunc("GET /api/logs", h.HandleGetLogs)
 	mux.HandleFunc("GET /api/stats", h.HandleGetStats)
 
-	// Serve embedded static files
-	staticFS, _ := fs.Sub(web.StaticFS, "static")
+	// Serve embedded static files from "dist"
+	staticFS, err := fs.Sub(web.StaticFS, "dist")
+	if err != nil {
+		fmt.Printf("warning: embedded static files not found: %v\n", err)
+	}
 	fileServer := http.FileServer(http.FS(staticFS))
-	mux.Handle("GET /static/", http.StripPrefix("/static/", fileServer))
 
-	// SPA fallback: serve index.html for root
-	mux.HandleFunc("GET /", func(w http.ResponseWriter, r *http.Request) {
-		if r.URL.Path != "/" {
-			http.NotFound(w, r)
+	// Catch-all handler for SPA
+	mux.HandleFunc("/", func(w http.ResponseWriter, r *http.Request) {
+		// If the file exists in staticFS, serve it
+		path := strings.TrimPrefix(r.URL.Path, "/")
+		if path == "" {
+			path = "index.html"
+		}
+
+		f, err := staticFS.Open(path)
+		if err == nil {
+			f.Close()
+			fileServer.ServeHTTP(w, r)
 			return
 		}
-		data, err := web.StaticFS.ReadFile("static/index.html")
+
+		// Otherwise serve index.html (SPA routing)
+		index, err := staticFS.Open("index.html")
 		if err != nil {
-			http.Error(w, "not found", http.StatusNotFound)
+			http.Error(w, "frontend not built", http.StatusNotFound)
 			return
 		}
-		w.Header().Set("Content-Type", "text/html; charset=utf-8")
-		w.Write(data)
+		defer index.Close()
+
+		stat, err := index.Stat()
+		if err != nil {
+			http.Error(w, "index info error", http.StatusInternalServerError)
+			return
+		}
+
+		http.ServeContent(w, r, "index.html", stat.ModTime(), index.(io.ReadSeeker))
 	})
 
 	return &http.Server{
