@@ -398,7 +398,8 @@ func (s *SQLiteStorage) QueryTraces(ctx context.Context, filter TraceFilter) ([]
 				   COUNT(*) as span_count,
 				   MAX(end_time) - MIN(start_time) as duration_ns,
 				   MAX(status_code) as status_code,
-				   MIN(start_time) as start_time
+				   MIN(start_time) as start_time,
+				   MIN(CASE WHEN parent_span_id = '' THEN attributes ELSE NULL END) as root_attributes
 			FROM spans %s
 			GROUP BY trace_id
 			ORDER BY start_time DESC
@@ -412,14 +413,17 @@ func (s *SQLiteStorage) QueryTraces(ctx context.Context, filter TraceFilter) ([]
 		for rows.Next() {
 			var t TraceSummary
 			var durationNs int64
-			var rootService, rootSpan sql.NullString
-			if err := rows.Scan(&t.TraceID, &rootService, &rootSpan, &t.SpanCount, &durationNs, &t.StatusCode, &t.StartTime); err != nil {
+			var rootService, rootSpan, rootAttrs sql.NullString
+			if err := rows.Scan(&t.TraceID, &rootService, &rootSpan, &t.SpanCount, &durationNs, &t.StatusCode, &t.StartTime, &rootAttrs); err != nil {
 				rows.Close()
 				return nil, 0, fmt.Errorf("scan trace: %w", err)
 			}
 			t.RootService = rootService.String
 			t.RootSpan = rootSpan.String
 			t.DurationMs = float64(durationNs) / 1e6
+			if rootAttrs.Valid {
+				json.Unmarshal([]byte(rootAttrs.String), &t.Attributes)
+			}
 			allTraces = append(allTraces, t)
 		}
 		rows.Close()
@@ -680,6 +684,7 @@ func (s *SQLiteStorage) QueryLogs(ctx context.Context, filter LogFilter) ([]LogR
 
 func (s *SQLiteStorage) GetServices(ctx context.Context) ([]ServiceInfo, error) {
 	serviceMap := make(map[string]*ServiceInfo)
+	serviceDurations := make(map[string][]int64)
 
 	dbs := s.getAllDBs()
 	for _, db := range dbs {
@@ -705,7 +710,6 @@ func (s *SQLiteStorage) GetServices(ctx context.Context) ([]ServiceInfo, error) 
 			if svc, ok := serviceMap[name]; ok {
 				svc.SpanCount += spanCount
 				svc.ErrorCount += errorCount
-				// we temporarily store total duration in AvgLatency
 				svc.AvgLatency += float64(totalDurationNs)
 			} else {
 				serviceMap[name] = &ServiceInfo{
@@ -717,13 +721,40 @@ func (s *SQLiteStorage) GetServices(ctx context.Context) ([]ServiceInfo, error) 
 			}
 		}
 		rows.Close()
+
+		// Get all durations for p95/p99 calculation
+		dRows, err := db.QueryContext(ctx, `SELECT service_name, duration_ns FROM spans WHERE parent_span_id = ''`)
+		if err == nil {
+			for dRows.Next() {
+				var name string
+				var d int64
+				if err := dRows.Scan(&name, &d); err == nil {
+					serviceDurations[name] = append(serviceDurations[name], d)
+				}
+			}
+			dRows.Close()
+		}
 	}
 
 	var services []ServiceInfo
-	for _, svc := range serviceMap {
+	for name, svc := range serviceMap {
 		if svc.SpanCount > 0 {
 			svc.AvgLatency = (svc.AvgLatency / float64(svc.SpanCount)) / 1e6 // to ms
 		}
+
+		durations := serviceDurations[name]
+		if len(durations) > 0 {
+			sort.Slice(durations, func(i, j int) bool { return durations[i] < durations[j] })
+
+			p95Idx := int(math.Ceil(float64(len(durations))*0.95)) - 1
+			if p95Idx < 0 { p95Idx = 0 }
+			svc.P95Latency = float64(durations[p95Idx]) / 1e6
+
+			p99Idx := int(math.Ceil(float64(len(durations))*0.99)) - 1
+			if p99Idx < 0 { p99Idx = 0 }
+			svc.P99Latency = float64(durations[p99Idx]) / 1e6
+		}
+
 		services = append(services, *svc)
 	}
 
@@ -733,13 +764,16 @@ func (s *SQLiteStorage) GetServices(ctx context.Context) ([]ServiceInfo, error) 
 
 	return services, nil
 }
-
 func (s *SQLiteStorage) GetStats(ctx context.Context, sinceNano int64) (*Stats, error) {
 	stats := &Stats{}
 	var totalErrors int64
 	var totalDurationNs float64
 	serviceSet := make(map[string]struct{})
 	var allDurations []int64
+
+	if sinceNano == 0 {
+		sinceNano = time.Now().Add(-1 * time.Hour).UnixNano()
+	}
 
 	dbs := s.getAllDBs()
 	for _, db := range dbs {
@@ -793,6 +827,35 @@ func (s *SQLiteStorage) GetStats(ctx context.Context, sinceNano int64) (*Stats, 
 				allDurations = append(allDurations, d)
 			}
 			p99rows.Close()
+		}
+
+		// TimeSeries (1-minute buckets for the last hour)
+		// SQLite doesn't have sophisticated date functions like Postgres, so we'll do simple math
+		// bucket = start_time / (1e9 * 60)
+		tsRows, err := db.QueryContext(ctx, `
+			SELECT (start_time / 60000000000) * 60 as bucket_ts,
+				   COUNT(*) as count,
+				   SUM(CASE WHEN status_code = 2 THEN 1 ELSE 0 END) as errors
+			FROM spans
+			WHERE start_time >= ?
+			GROUP BY bucket_ts
+			ORDER BY bucket_ts ASC`, sinceNano)
+		if err == nil {
+			for tsRows.Next() {
+				var ts, count, errors int64
+				if err := tsRows.Scan(&ts, &count, &errors); err == nil {
+					errRate := 0.0
+					if count > 0 {
+						errRate = float64(errors) / float64(count)
+					}
+					stats.TimeSeries = append(stats.TimeSeries, StatsDataPoint{
+						Timestamp: ts,
+						RPS:       float64(count) / 60.0,
+						ErrorRate: errRate,
+					})
+				}
+			}
+			tsRows.Close()
 		}
 	}
 

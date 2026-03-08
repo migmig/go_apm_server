@@ -1,8 +1,8 @@
-import { useEffect, useState } from 'react';
-import { useParams } from 'react-router-dom';
-import { client } from '../api/client';
+import { useEffect, useState, useMemo } from 'react';
+import { useParams, Link } from 'react-router-dom';
+import client from '../api/client';
 import { format } from 'date-fns';
-import { ChevronRight, ChevronDown } from 'lucide-react';
+import { ChevronLeft, Clock, Server, Layers, Info, AlertCircle } from 'lucide-react';
 
 interface Span {
   trace_id: string;
@@ -17,16 +17,40 @@ interface Span {
   attributes: Record<string, any>;
 }
 
+interface SpanNode extends Span {
+  children: SpanNode[];
+  depth: number;
+}
+
+// Helper to assign a color based on service name
+const getServiceColor = (name: string) => {
+  const colors = [
+    'bg-blue-500', 'bg-indigo-500', 'bg-purple-500', 
+    'bg-emerald-500', 'bg-cyan-500', 'bg-teal-500', 
+    'bg-orange-500', 'bg-pink-500', 'bg-violet-500'
+  ];
+  let hash = 0;
+  for (let i = 0; i < name.length; i++) {
+    hash = name.charCodeAt(i) + ((hash << 5) - hash);
+  }
+  return colors[Math.abs(hash) % colors.length];
+};
+
 export default function TraceDetail() {
   const { traceId } = useParams();
   const [spans, setSpans] = useState<Span[]>([]);
   const [loading, setLoading] = useState(true);
+  const [selectedSpan, setSelectedSpan] = useState<Span | null>(null);
 
   useEffect(() => {
     async function fetchTrace() {
       try {
         const res = await client.get(`/traces/${traceId}`);
-        setSpans(res.data.spans || []);
+        const rawSpans = res.data.spans || [];
+        setSpans(rawSpans);
+        if (rawSpans.length > 0) {
+          setSelectedSpan(rawSpans[0]);
+        }
       } catch (err) {
         console.error('Failed to fetch trace detail', err);
       } finally {
@@ -36,52 +60,197 @@ export default function TraceDetail() {
     fetchTrace();
   }, [traceId]);
 
-  if (loading) return <div className="p-8">Loading trace detail...</div>;
-  if (spans.length === 0) return <div className="p-8">Trace not found.</div>;
+  // Build tree and flatten it for rendering
+  const flattenedNodes = useMemo(() => {
+    if (spans.length === 0) return [];
 
-  const minStart = Math.min(...spans.map(s => s.start_time));
-  const maxEnd = Math.max(...spans.map(s => s.end_time));
-  const totalDuration = maxEnd - minStart;
+    const nodesMap: Record<string, SpanNode> = {};
+    spans.forEach(s => {
+      nodesMap[s.span_id] = { ...s, children: [], depth: 0 };
+    });
+
+    const roots: SpanNode[] = [];
+    spans.forEach(s => {
+      const node = nodesMap[s.span_id];
+      if (s.parent_span_id && nodesMap[s.parent_span_id]) {
+        nodesMap[s.parent_span_id].children.push(node);
+      } else {
+        roots.push(node);
+      }
+    });
+
+    const result: SpanNode[] = [];
+    const traverse = (node: SpanNode, depth: number) => {
+      node.depth = depth;
+      result.push(node);
+      // Sort children by start time
+      node.children.sort((a, b) => a.start_time - b.start_time);
+      node.children.forEach(child => traverse(child, depth + 1));
+    };
+
+    roots.sort((a, b) => a.start_time - b.start_time);
+    roots.forEach(r => traverse(r, 0));
+    return result;
+  }, [spans]);
+
+  const traceStats = useMemo(() => {
+    if (spans.length === 0) return { minStart: 0, maxEnd: 0, totalDuration: 0 };
+    const minStart = Math.min(...spans.map(s => s.start_time));
+    const maxEnd = Math.max(...spans.map(s => s.end_time));
+    return { minStart, maxEnd, totalDuration: maxEnd - minStart };
+  }, [spans]);
+
+  if (loading) return <div className="flex items-center justify-center h-full text-slate-500 animate-pulse font-mono">RECONSTRUCTING TRACE HIERARCHY...</div>;
+  if (spans.length === 0) return <div className="p-8 text-center text-slate-500">Trace <span className="font-mono text-slate-300">{traceId}</span> not found.</div>;
 
   return (
-    <div className="space-y-6">
-      <div className="bg-white p-6 rounded-lg shadow-sm border border-gray-100">
-        <h1 className="text-xl font-bold truncate">Trace: {traceId}</h1>
-        <div className="mt-2 text-sm text-gray-500 flex space-x-4">
-          <span>Spans: {spans.length}</span>
-          <span>Total Duration: {(totalDuration / 1e6).toFixed(2)}ms</span>
+    <div className="space-y-6 animate-in fade-in duration-500 flex flex-col h-[calc(100vh-100px)]">
+      {/* Header */}
+      <div className="flex items-center justify-between bg-[#0f172a] p-4 rounded-xl border border-slate-800">
+        <div className="flex items-center space-x-4">
+          <Link to="/traces" className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors">
+            <ChevronLeft size={20} />
+          </Link>
+          <div>
+            <div className="flex items-center space-x-3">
+              <h1 className="text-lg font-bold text-slate-100 font-mono">{traceId}</h1>
+              <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[10px] font-bold rounded border border-blue-500/20 uppercase tracking-widest">Trace</span>
+            </div>
+            <div className="mt-1 flex items-center space-x-4 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+              <span className="flex items-center"><Layers size={12} className="mr-1.5 text-blue-500" /> {spans.length} Spans</span>
+              <span className="flex items-center"><Clock size={12} className="mr-1.5 text-blue-500" /> {(traceStats.totalDuration / 1e6).toFixed(2)}ms Total Duration</span>
+            </div>
+          </div>
         </div>
       </div>
 
-      <div className="bg-white rounded-lg shadow-sm border border-gray-100 overflow-hidden">
-        <div className="p-4 bg-gray-50 border-b border-gray-200 flex text-xs font-semibold text-gray-500 uppercase">
-          <div className="w-1/3">Service & Span</div>
-          <div className="w-2/3">Timeline</div>
-        </div>
-        <div className="divide-y divide-gray-100">
-          {spans.map((span) => {
-            const left = ((span.start_time - minStart) / totalDuration) * 100;
-            const width = (span.duration_ns / totalDuration) * 100;
-            
-            return (
-              <div key={span.span_id} className="flex p-4 hover:bg-gray-50 items-center">
-                <div className="w-1/3 pr-4 truncate">
-                  <p className="text-xs font-bold text-blue-600 uppercase tracking-tighter">{span.service_name}</p>
-                  <p className="text-sm font-medium text-gray-900 truncate">{span.span_name}</p>
-                </div>
-                <div className="w-2/3 relative h-6 bg-gray-50 rounded overflow-hidden">
-                  <div 
-                    className={`absolute h-full rounded ${span.status_code === 2 ? 'bg-red-400' : 'bg-blue-400'}`}
-                    style={{ left: `${left}%`, width: `${Math.max(width, 0.5)}%` }}
-                  >
-                    <span className="absolute left-full ml-2 text-[10px] whitespace-nowrap leading-6 text-gray-500">
-                      {(span.duration_ns / 1e6).toFixed(2)}ms
-                    </span>
+      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 flex-1 min-h-0">
+        {/* Waterfall Chart */}
+        <div className="xl:col-span-3 bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm flex flex-col overflow-hidden">
+          <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+            <div className="w-1/3 border-r border-slate-800 px-2">Service & Operation</div>
+            <div className="w-2/3 px-4 flex justify-between">
+              <span>Timeline</span>
+              <span>{(traceStats.totalDuration / 1e6).toFixed(2)} ms</span>
+            </div>
+          </div>
+          
+          <div className="flex-1 overflow-y-auto divide-y divide-slate-800/30 scrollbar-hide">
+            {flattenedNodes.map((span) => {
+              const left = ((span.start_time - traceStats.minStart) / traceStats.totalDuration) * 100;
+              const width = Math.max((span.duration_ns / traceStats.totalDuration) * 100, 0.2);
+              const isSelected = selectedSpan?.span_id === span.span_id;
+              const hasError = span.status_code === 2;
+              
+              return (
+                <div 
+                  key={span.span_id} 
+                  onClick={() => setSelectedSpan(span)}
+                  className={`flex group cursor-pointer transition-all ${isSelected ? 'bg-blue-600/10' : 'hover:bg-slate-800/30'}`}
+                >
+                  {/* Operation Info */}
+                  <div className="w-1/3 p-3 border-r border-slate-800/50 flex flex-col justify-center min-w-0 relative">
+                    {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>}
+                    <div 
+                      className="truncate"
+                      style={{ paddingLeft: `${span.depth * 16}px` }}
+                    >
+                      <div className="flex items-center mb-0.5">
+                        {span.depth > 0 && (
+                          <div className="absolute left-0 w-px bg-slate-700/50 h-full" style={{ left: `${(span.depth * 16) - 8}px` }}></div>
+                        )}
+                        <span className={`text-[9px] font-black uppercase px-1 rounded mr-2 ${getServiceColor(span.service_name)} text-white`}>
+                          {span.service_name}
+                        </span>
+                        {hasError && <AlertCircle size={12} className="text-rose-500 shrink-0" />}
+                      </div>
+                      <div className={`text-xs font-medium truncate ${isSelected ? 'text-blue-400' : 'text-slate-300'}`}>
+                        {span.span_name}
+                      </div>
+                    </div>
+                  </div>
+
+                  {/* Timeline Bar */}
+                  <div className="w-2/3 p-3 relative flex items-center">
+                    <div className="absolute inset-0 flex justify-between px-4 pointer-events-none">
+                      {[0, 25, 50, 75, 100].map(p => (
+                        <div key={p} className="h-full w-px bg-slate-800/30"></div>
+                      ))}
+                    </div>
+                    
+                    <div 
+                      className={`h-5 rounded-sm relative flex items-center transition-all duration-500 group-hover:brightness-110 ${getServiceColor(span.service_name)} ${hasError ? 'ring-2 ring-rose-500 ring-offset-2 ring-offset-[#0f172a]' : 'shadow-lg shadow-black/20'}`}
+                      style={{ 
+                        left: `${left}%`, 
+                        width: `${width}%`,
+                        minWidth: '4px'
+                      }}
+                    >
+                      {/* Duration label inside or outside based on width */}
+                      <span className={`absolute whitespace-nowrap text-[9px] font-bold font-mono ${width > 15 ? 'left-2 text-white' : 'left-full ml-3 text-slate-500'}`}>
+                        {(span.duration_ns / 1e6).toFixed(2)} ms
+                      </span>
+                    </div>
                   </div>
                 </div>
+              );
+            })}
+          </div>
+        </div>
+
+        {/* Metadata Sidebar */}
+        <div className="bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm overflow-hidden flex flex-col">
+          <div className="p-4 bg-slate-900/50 border-b border-slate-800 flex items-center">
+            <Info size={16} className="mr-2 text-blue-400" />
+            <h2 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Span Metadata</h2>
+          </div>
+          
+          {selectedSpan ? (
+            <div className="p-5 space-y-6 overflow-y-auto flex-1">
+              <section>
+                <h3 className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest flex items-center">
+                  <Server size={12} className="mr-2" /> Context
+                </h3>
+                <div className="space-y-3">
+                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+                    <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Service</p>
+                    <p className="text-sm font-bold text-slate-200">{selectedSpan.service_name}</p>
+                  </div>
+                  <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+                    <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Operation</p>
+                    <p className="text-sm font-bold text-blue-400 font-mono">{selectedSpan.span_name}</p>
+                  </div>
+                </div>
+              </section>
+
+              <section>
+                <h3 className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest flex items-center">
+                  <Layers size={12} className="mr-2" /> Attributes
+                </h3>
+                <div className="grid grid-cols-1 gap-2">
+                  {Object.entries(selectedSpan.attributes).length > 0 ? (
+                    Object.entries(selectedSpan.attributes).map(([k, v]) => (
+                      <div key={k} className="flex flex-col bg-slate-900/40 p-2.5 rounded-lg border border-slate-800 group/attr hover:border-slate-700 transition-colors">
+                        <span className="text-[9px] text-indigo-400 font-bold mb-1 uppercase tracking-tighter truncate opacity-80">{k}</span>
+                        <span className="text-slate-300 break-all font-mono text-xs leading-relaxed">{String(v)}</span>
+                      </div>
+                    ))
+                  ) : (
+                    <div className="text-center p-8 border border-dashed border-slate-800 rounded-lg">
+                      <p className="text-slate-600 italic text-xs">No attributes defined</p>
+                    </div>
+                  )}
+                </div>
+              </section>
+            </div>
+          ) : (
+            <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
+              <div className="w-12 h-12 bg-slate-800/50 rounded-full flex items-center justify-center mb-4">
+                <Layers className="text-slate-600" size={24} />
               </div>
-            );
-          })}
+              <p className="text-slate-500 text-sm font-medium">Select a span from the waterfall to view details</p>
+            </div>
+          )}
         </div>
       </div>
     </div>

@@ -56,13 +56,14 @@ type LogRecord struct {
 }
 
 type TraceSummary struct {
-	TraceID     string  `json:"trace_id"`
-	RootService string  `json:"root_service"`
-	RootSpan    string  `json:"root_span"`
-	SpanCount   int     `json:"span_count"`
-	DurationMs  float64 `json:"duration_ms"`
-	StatusCode  int32   `json:"status_code"`
-	StartTime   int64   `json:"start_time"`
+	TraceID     string         `json:"trace_id"`
+	RootService string         `json:"root_service"`
+	RootSpan    string         `json:"root_span"`
+	SpanCount   int            `json:"span_count"`
+	DurationMs  float64        `json:"duration_ms"`
+	StatusCode  int32          `json:"status_code"`
+	StartTime   int64          `json:"start_time"`
+	Attributes  map[string]any `json:"attributes"`
 }
 
 type ServiceInfo struct {
@@ -70,16 +71,25 @@ type ServiceInfo struct {
 	SpanCount  int64   `json:"span_count"`
 	ErrorCount int64   `json:"error_count"`
 	AvgLatency float64 `json:"avg_latency_ms"`
+	P95Latency float64 `json:"p95_latency_ms"`
+	P99Latency float64 `json:"p99_latency_ms"`
 }
 
 type Stats struct {
-	TotalTraces  int64   `json:"total_traces"`
-	TotalSpans   int64   `json:"total_spans"`
-	TotalLogs    int64   `json:"total_logs"`
-	ErrorRate    float64 `json:"error_rate"`
-	ServiceCount int     `json:"service_count"`
-	AvgLatencyMs float64 `json:"avg_latency_ms"`
-	P99LatencyMs float64 `json:"p99_latency_ms"`
+	TotalTraces  int64            `json:"total_traces"`
+	TotalSpans   int64            `json:"total_spans"`
+	TotalLogs    int64            `json:"total_logs"`
+	ErrorRate    float64          `json:"error_rate"`
+	ServiceCount int              `json:"service_count"`
+	AvgLatencyMs float64          `json:"avg_latency_ms"`
+	P99LatencyMs float64          `json:"p99_latency_ms"`
+	TimeSeries   []StatsDataPoint `json:"time_series"`
+}
+
+type StatsDataPoint struct {
+	Timestamp int64   `json:"timestamp"`
+	RPS       float64 `json:"rps"`
+	ErrorRate float64 `json:"error_rate"`
 }
 
 type TraceFilter struct {
