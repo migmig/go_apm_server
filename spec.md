@@ -16,7 +16,7 @@
 ### 1.2 의존 패키지
 
 ```
-go.opentelemetry.io/proto/otlp v1.x          # OTLP protobuf 정의
+go.opentelemetry.io/collector/pdata v1.x      # OTLP 데이터 파싱 및 변환
 google.golang.org/grpc v1.x                   # gRPC 서버
 modernc.org/sqlite v1.x                       # CGO-free SQLite 드라이버
 gopkg.in/yaml.v3                              # YAML 설정 파싱
@@ -33,6 +33,7 @@ type Config struct {
     Server   ServerConfig   `yaml:"server"`
     Receiver ReceiverConfig `yaml:"receiver"`
     Storage  StorageConfig  `yaml:"storage"`
+    Processor ProcessorConfig `yaml:"processor"`
 }
 
 type ServerConfig struct {
@@ -45,8 +46,13 @@ type ReceiverConfig struct {
 }
 
 type StorageConfig struct {
-    Path          string `yaml:"path"`           // default: "./data/apm.db"
+    DataDir       string `yaml:"data_dir"`       // default: "./data" (일별 파티셔닝 파일들이 저장될 디렉토리)
     RetentionDays int    `yaml:"retention_days"` // default: 7
+}
+
+type ProcessorConfig struct {
+    BatchSize int           `yaml:"batch_size"` // default: 1000
+    BatchTimeout time.Duration `yaml:"batch_timeout"` // default: 1s
 }
 ```
 
@@ -151,7 +157,7 @@ type Storage interface {
     GetStats(ctx context.Context, since time.Time) (*Stats, error)
 
     // Maintenance
-    DeleteOlderThan(ctx context.Context, before time.Time) (int64, error)
+    DeleteOldPartitions(ctx context.Context, retentionDays int) (int, error) // 일별 파티셔닝 파일 삭제
     Close() error
 }
 ```
@@ -306,15 +312,17 @@ func (s *GRPCReceiver) Export(ctx context.Context,
 
 JSON 요청은 `protojson`으로 디코딩. protobuf 요청은 `proto.Unmarshal`로 디코딩.
 
-### 4.3 Protobuf → 내부 모델 변환 (`internal/processor`)
+### 4.3 `pdata` 기반 내부 모델 변환 및 배치 처리 (`internal/processor`)
 
-`processor.go`에서 OTLP protobuf 메시지를 내부 `Span`, `Metric`, `LogRecord`로 변환한다.
+`processor.go`에서 `go.opentelemetry.io/collector/pdata`를 활용하여 OTLP 바이트/메시지를 내부 `Span`, `Metric`, `LogRecord`로 효율적으로 변환하고 배치 처리한다.
 
-- `ResourceSpans` → 루프 → `resource.attributes`에서 `service.name` 추출
-- `ScopeSpans` → 루프 → 각 `Span` protobuf를 내부 `Span` 구조체로 매핑
-- `trace_id`, `span_id`는 hex 인코딩 문자열로 변환
-- `attributes` (KeyValue 배열) → `map[string]any`로 변환
-- 메트릭/로그도 동일한 패턴으로 변환
+- `pdata.TracesUnmarshaler` 등을 사용해 바이트를 `pmetric.Metrics`, `ptrace.Traces`, `plog.Logs` 구조체로 언마샬링.
+- `ResourceSpans` → 루프 → `resource.Attributes()`에서 `service.name` 추출.
+- `ScopeSpans` → 루프 → 각 `ptrace.Span` 데이터를 내부 `Span` 구조체로 매핑.
+- `TraceID()`, `SpanID()` 메서드로 hex 문자열 변환.
+- `Attributes()`를 JSON 형식의 `map[string]any` (이후 JSON1 활용을 위해 텍스트 변환 고려)로 변환.
+- **Batch Processing:** 수신된 데이터를 즉시 Insert하지 않고 Go Channel 또는 Ring Buffer를 통해 임시 저장(`Memory Buffer`).
+- 일정 갯수(`BatchSize`, 예: 1000)가 차거나, 시간(`BatchTimeout`, 예: 1s)이 초과될 때 묶어서 `Storage.Insert*()` 호출(Bulk Insert).
 
 ---
 
@@ -428,6 +436,17 @@ JSON 요청은 `protojson`으로 디코딩. protobuf 요청은 `proto.Unmarshal`
 }
 ```
 
+#### `GET /metrics`
+```text
+# HELP apm_server_traces_received_total Total traces received
+# TYPE apm_server_traces_received_total counter
+apm_server_traces_received_total 15230
+
+# HELP go_goroutines Number of goroutines that currently exist.
+# TYPE go_goroutines gauge
+go_goroutines 42
+```
+
 #### `GET /health`
 ```json
 {"status": "ok"}
@@ -447,10 +466,10 @@ JSON 요청은 `protojson`으로 디코딩. protobuf 요청은 `proto.Unmarshal`
 
 ### 6.1 기술 선택
 
-- **프레임워크 없음**: Vanilla JS + HTML 템플릿
-- **CSS**: 경량 CSS (커스텀, 다크 테마)
-- **차트**: uPlot (시계열), 커스텀 SVG (워터폴)
-- **라우팅**: Hash 기반 SPA 라우팅 (`#/traces`, `#/logs` 등)
+- **빌드 도구**: Vite
+- **프레임워크**: React, Vue, 또는 Svelte (개발 효율성을 위한 경량 프레임워크 도입)
+- **차트**: 시계열 차트 라이브러리 (uPlot 등), 오픈소스 컴포넌트(간략화된 간트 차트 라이브러리나 Jaeger UI 컴포넌트) 활용한 워터폴 차트 구현
+- **라우팅**: SPA 라우팅 (각 프레임워크별 라우터 사용)
 
 ### 6.2 페이지 구성
 
@@ -472,12 +491,14 @@ JSON 요청은 `protojson`으로 디코딩. protobuf 요청은 `proto.Unmarshal`
 
 ### 6.4 정적 파일 서빙
 
+프론트엔드 빌드 결과물(`dist` 또는 `build` 폴더)을 바이너리에 포함한다.
+
 ```go
-//go:embed static/*
+//go:embed dist/*
 var staticFS embed.FS
 
-// API 서버에서 fallback으로 서빙
-mux.Handle("GET /", http.FileServerFS(staticFS))
+// API 서버에서 fallback으로 서빙. React Router 등 History API 기반 라우팅 지원을 위해 핸들러 수정 필요할 수 있음.
+// mux.Handle("GET /", http.FileServer(http.FS(subFS)))
 ```
 
 ---
@@ -487,26 +508,29 @@ mux.Handle("GET /", http.FileServerFS(staticFS))
 ```
 main()
   ├── config.Load()
-  ├── storage.NewSQLite(config.Storage)
-  ├── processor.New(storage)
+  ├── storage.NewTimePartitionedSQLite(config.Storage) // 일별 DB 파일 관리
+  ├── processor.NewBatchProcessor(storage, config.Processor)
   ├── receiver.NewGRPC(config.Receiver, processor)  → go serve
   ├── receiver.NewHTTP(config.Receiver, processor)   → go serve
   ├── api.NewServer(config.Server, storage)          → go serve
-  ├── retention.Start(storage, config.Storage)       → go run
+  ├── retention.StartPartitionCleaner(storage, config.Storage) → go run (주기적으로 오래된 DB 파일 삭제)
   └── signal.NotifyContext(SIGINT, SIGTERM) → wait → shutdown all
 ```
 
 Graceful shutdown 순서:
 1. 새 요청 수신 중단 (리스너 닫기)
 2. 진행 중 요청 완료 대기 (timeout 30초)
-3. Storage 닫기 (SQLite WAL flush)
+3. Processor의 배치 버퍼 Flush
+4. Storage 닫기 (SQLite WAL flush)
 
 ---
 
 ## 8. 성능 고려사항
 
+- **Time-partitioned Database**: 데이터를 일별로 저장하는 DB 파일 분리 전략으로 데이터 삽입/조회/삭제 시 단편화를 방지하고 삭제 오버헤드 0을 달성.
 - SQLite WAL 모드 활성화 (`PRAGMA journal_mode=WAL`)
-- 쓰기 배치: 수신 데이터를 100ms 또는 100건 단위로 배치 INSERT
+- 쓰기 배치 (Memory Buffer & Batcher): Channel/Ring Buffer를 통해 수신 데이터를 모아두고 일괄 처리(Bulk Insert)하여 동시성 쓰기 병목 회피
+- JSON1 최적화: `attributes` 등을 파싱하지 않고 바로 텍스트 저장, SQLite의 내장 `json_extract()` 함수로 유연하게 조회.
 - 읽기/쓰기 동시성: WAL 모드에서 읽기는 쓰기와 동시 가능
 - `PRAGMA synchronous=NORMAL` (성능과 안전성 균형)
 - 인덱스는 주요 쿼리 패턴에 맞춰 최소한으로 유지
