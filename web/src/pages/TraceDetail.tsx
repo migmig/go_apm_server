@@ -100,8 +100,8 @@ export default function TraceDetail() {
     return { minStart, maxEnd, totalDuration: maxEnd - minStart };
   }, [spans]);
 
-  if (loading) return <div className="flex items-center justify-center h-full text-slate-500 animate-pulse font-mono">RECONSTRUCTING TRACE HIERARCHY...</div>;
-  if (spans.length === 0) return <div className="p-8 text-center text-slate-500">Trace <span className="font-mono text-slate-300">{traceId}</span> not found.</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-slate-500 animate-pulse font-mono">요청 구조 재구성 중...</div>;
+  if (spans.length === 0) return <div className="p-8 text-center text-slate-500">요청 ID <span className="font-mono text-slate-300">{traceId}</span>를 찾을 수 없습니다.</div>;
 
   return (
     <div className="space-y-6 animate-in fade-in duration-500 flex flex-col h-[calc(100vh-100px)]">
@@ -114,11 +114,11 @@ export default function TraceDetail() {
           <div>
             <div className="flex items-center space-x-3">
               <h1 className="text-lg font-bold text-slate-100 font-mono">{traceId}</h1>
-              <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[10px] font-bold rounded border border-blue-500/20 uppercase tracking-widest">Trace</span>
+              <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[10px] font-bold rounded border border-blue-500/20 uppercase tracking-widest">요청 상세</span>
             </div>
             <div className="mt-1 flex items-center space-x-4 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
-              <span className="flex items-center"><Layers size={12} className="mr-1.5 text-blue-500" /> {spans.length} Spans</span>
-              <span className="flex items-center"><Clock size={12} className="mr-1.5 text-blue-500" /> {(traceStats.totalDuration / 1e6).toFixed(2)}ms Total Duration</span>
+              <span className="flex items-center"><Layers size={12} className="mr-1.5 text-blue-500" /> {spans.length} 개의 작업</span>
+              <span className="flex items-center"><Clock size={12} className="mr-1.5 text-blue-500" /> 총 소요 시간: {(traceStats.totalDuration / 1e6).toFixed(2)}ms</span>
             </div>
           </div>
         </div>
@@ -128,9 +128,9 @@ export default function TraceDetail() {
         {/* Waterfall Chart */}
         <div className="xl:col-span-3 bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm flex flex-col overflow-hidden">
           <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex text-[10px] font-bold text-slate-500 uppercase tracking-widest">
-            <div className="w-1/3 border-r border-slate-800 px-2">Service & Operation</div>
+            <div className="w-1/3 border-r border-slate-800 px-2">서비스 및 작업명</div>
             <div className="w-2/3 px-4 flex justify-between">
-              <span>Timeline</span>
+              <span>진행 시간표 (Timeline)</span>
               <span>{(traceStats.totalDuration / 1e6).toFixed(2)} ms</span>
             </div>
           </div>
@@ -202,22 +202,22 @@ export default function TraceDetail() {
         <div className="bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm overflow-hidden flex flex-col">
           <div className="p-4 bg-slate-900/50 border-b border-slate-800 flex items-center">
             <Info size={16} className="mr-2 text-blue-400" />
-            <h2 className="text-xs font-bold text-slate-200 uppercase tracking-widest">Span Metadata</h2>
+            <h2 className="text-xs font-bold text-slate-200 uppercase tracking-widest">상세 정보 (Metadata)</h2>
           </div>
           
           {selectedSpan ? (
             <div className="p-5 space-y-6 overflow-y-auto flex-1">
               <section>
                 <h3 className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest flex items-center">
-                  <Server size={12} className="mr-2" /> Context
+                  <Server size={12} className="mr-2" /> 컨텍스트
                 </h3>
                 <div className="space-y-3">
                   <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-                    <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Service</p>
+                    <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">서비스</p>
                     <p className="text-sm font-bold text-slate-200">{selectedSpan.service_name}</p>
                   </div>
                   <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-                    <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">Operation</p>
+                    <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">수행 작업</p>
                     <p className="text-sm font-bold text-blue-400 font-mono">{selectedSpan.span_name}</p>
                   </div>
                 </div>
@@ -225,7 +225,7 @@ export default function TraceDetail() {
 
               <section>
                 <h3 className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest flex items-center">
-                  <Layers size={12} className="mr-2" /> Attributes
+                  <Layers size={12} className="mr-2" /> 부가 정보 (Attributes)
                 </h3>
                 <div className="grid grid-cols-1 gap-2">
                   {Object.entries(selectedSpan.attributes).length > 0 ? (
@@ -237,7 +237,7 @@ export default function TraceDetail() {
                     ))
                   ) : (
                     <div className="text-center p-8 border border-dashed border-slate-800 rounded-lg">
-                      <p className="text-slate-600 italic text-xs">No attributes defined</p>
+                      <p className="text-slate-600 italic text-xs">기록된 부가 정보가 없습니다.</p>
                     </div>
                   )}
                 </div>
@@ -248,7 +248,7 @@ export default function TraceDetail() {
               <div className="w-12 h-12 bg-slate-800/50 rounded-full flex items-center justify-center mb-4">
                 <Layers className="text-slate-600" size={24} />
               </div>
-              <p className="text-slate-500 text-sm font-medium">Select a span from the waterfall to view details</p>
+              <p className="text-slate-500 text-sm font-medium">타임라인에서 작업을 선택하여 상세 정보를 확인하세요.</p>
             </div>
           )}
         </div>

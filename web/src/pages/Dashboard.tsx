@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react';
 import { api, Stats, ServiceInfo } from '../api/client';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
-import { Activity, Server, FileText, AlertCircle, Clock, Zap, ArrowUpRight, ArrowDownRight } from 'lucide-react';
+import { Activity, AlertCircle, Clock, Zap } from 'lucide-react';
 import { format } from 'date-fns';
 
 export default function Dashboard() {
@@ -29,24 +29,24 @@ export default function Dashboard() {
     return () => clearInterval(interval);
   }, []);
 
-  if (loading) return <div className="flex items-center justify-center h-full text-slate-500 animate-pulse font-mono">LOADING SYSTEM METRICS...</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-slate-500 animate-pulse font-mono">시스템 지표를 불러오는 중...</div>;
 
   const statCards = [
-    { label: 'Total Traces', value: stats?.total_traces, icon: Activity, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    { label: 'Total Spans', value: stats?.total_spans, icon: Zap, color: 'text-amber-400', bg: 'bg-amber-500/10' },
-    { label: 'Error Rate', value: `${((stats?.error_rate || 0) * 100).toFixed(2)}%`, icon: AlertCircle, color: stats?.error_rate && stats.error_rate > 0.05 ? 'text-rose-500' : 'text-rose-400', bg: 'bg-rose-500/10', warning: stats?.error_rate && stats.error_rate > 0.05 },
-    { label: 'Avg Latency', value: `${stats?.avg_latency_ms.toFixed(2)}ms`, icon: Clock, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
+    { label: '전체 요청 수', value: stats?.total_traces, icon: Activity, color: 'text-blue-400', bg: 'bg-blue-500/10' },
+    { label: '전체 작업(Span) 수', value: stats?.total_spans, icon: Zap, color: 'text-amber-400', bg: 'bg-amber-500/10' },
+    { label: '에러 발생률', value: `${((stats?.error_rate || 0) * 100).toFixed(2)}%`, icon: AlertCircle, color: stats?.error_rate && stats.error_rate > 0.05 ? 'text-rose-500' : 'text-rose-400', bg: 'bg-rose-500/10', warning: stats?.error_rate && stats.error_rate > 0.05 },
+    { label: '평균 응답 시간', value: `${stats?.avg_latency_ms.toFixed(2)}ms`, icon: Clock, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
   ];
 
   return (
     <div className="space-y-8 animate-in fade-in duration-500">
       <div className="flex items-end justify-between">
         <div>
-          <h1 className="text-2xl font-bold text-slate-100">System Dashboard</h1>
-          <p className="text-slate-400 text-sm mt-1 font-mono uppercase tracking-tighter">Live observability stream from all nodes</p>
+          <h1 className="text-2xl font-bold text-slate-100">시스템 현황판</h1>
+          <p className="text-slate-400 text-sm mt-1 font-mono uppercase tracking-tighter">모든 서비스 노드의 실시간 상태를 모니터링합니다</p>
         </div>
         <div className="text-right">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Last Updated</p>
+          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">마지막 업데이트</p>
           <p className="text-xs text-slate-300 font-mono">{format(new Date(), 'HH:mm:ss')}</p>
         </div>
       </div>
@@ -80,7 +80,7 @@ export default function Dashboard() {
           <div className="flex items-center justify-between mb-8">
              <h2 className="text-lg font-semibold text-slate-200 flex items-center">
               <Activity className="mr-3 text-blue-500" size={20} />
-              Requests Per Second (RPS)
+              초당 요청 수 (RPS)
             </h2>
           </div>
           <div className="h-72">
@@ -117,7 +117,7 @@ export default function Dashboard() {
         <div className="bg-[#0f172a] p-8 rounded-xl border border-slate-800 shadow-sm flex flex-col">
           <h2 className="text-lg font-semibold text-slate-200 mb-6 flex items-center">
             <AlertCircle className="mr-3 text-rose-500" size={20} />
-            Error Rate Trend
+            에러 발생률 추이
           </h2>
           <div className="flex-1 h-72 lg:h-auto">
             <ResponsiveContainer width="100%" height="100%">
@@ -146,20 +146,20 @@ export default function Dashboard() {
 
       <div className="bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm overflow-hidden">
         <div className="px-8 py-6 border-b border-slate-800 flex justify-between items-center">
-          <h2 className="text-lg font-semibold text-slate-200">Service Performance</h2>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">Across All Datacenters</span>
+          <h2 className="text-lg font-semibold text-slate-200">서비스별 성능 현황</h2>
+          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">전체 데이터 기반</span>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-800">
             <thead className="bg-slate-900/30">
               <tr>
-                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Service Name</th>
-                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">RPS</th>
-                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Error Rate</th>
-                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Avg Latency</th>
-                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">p95</th>
-                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">p99</th>
-                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">Health</th>
+                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">서비스 이름</th>
+                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">초당 요청(RPS)</th>
+                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">에러율</th>
+                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">평균 응답시간</th>
+                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">상위 5% (p95)</th>
+                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">상위 1% (p99)</th>
+                <th className="px-8 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">상태</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
@@ -193,11 +193,11 @@ export default function Dashboard() {
                     <td className="px-8 py-4 whitespace-nowrap">
                       {isUnhealthy ? (
                         <div className="flex items-center text-rose-400 text-[10px] font-bold uppercase tracking-tighter">
-                          <AlertCircle size={14} className="mr-1" /> Critical
+                          <AlertCircle size={14} className="mr-1" /> 위급
                         </div>
                       ) : (
                         <div className="flex items-center text-emerald-400 text-[10px] font-bold uppercase tracking-tighter">
-                          Healthy
+                          정상
                         </div>
                       )}
                     </td>

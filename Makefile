@@ -24,6 +24,16 @@ run: build-server
 	@echo "Running server..."
 	./$(BINARY_NAME) --config configs/config.yaml
 
+# Generate sample data using testclient
+sample-data:
+	@echo "Generating sample data..."
+	go run cmd/testclient/main.go
+
+# Run simple grpc example client
+grpc-example:
+	@echo "Running gRPC example client..."
+	go run examples/grpc-client/main.go
+
 # Clean up build artifacts
 clean:
 	@echo "Cleaning up..."
@@ -45,5 +55,7 @@ help:
 	@echo "  make build-web     - Build only the frontend"
 	@echo "  make build-server  - Build both frontend and Go server"
 	@echo "  make run           - Build and run the server locally"
+	@echo "  make sample-data   - Generate sample data for testing"
+	@echo "  make grpc-example  - Run a simple gRPC client example"
 	@echo "  make docker-build  - Build the multi-stage Docker image"
 	@echo "  make clean         - Remove build artifacts"

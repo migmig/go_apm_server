@@ -57,22 +57,22 @@ function App() {
 
         <nav className="flex-1 px-4 mt-2">
           <div className="mb-8">
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4 mb-4">Monitoring</p>
-            <SidebarItem to="/" icon={LayoutDashboard}>Dashboard</SidebarItem>
-            <SidebarItem to="/traces" icon={ListTree}>Traces</SidebarItem>
-            <SidebarItem to="/logs" icon={FileTerminal}>Logs</SidebarItem>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4 mb-4">모니터링</p>
+            <SidebarItem to="/" icon={LayoutDashboard}>대시보드</SidebarItem>
+            <SidebarItem to="/traces" icon={ListTree}>요청 추적</SidebarItem>
+            <SidebarItem to="/logs" icon={FileTerminal}>로그 기록</SidebarItem>
           </div>
           
           <div>
-            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4 mb-4">System</p>
-            <SidebarItem to="/settings" icon={Settings}>Settings</SidebarItem>
+            <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest px-4 mb-4">시스템</p>
+            <SidebarItem to="/settings" icon={Settings}>설정</SidebarItem>
           </div>
         </nav>
 
         <div className="p-4 border-t border-slate-800">
           <div className="flex items-center px-4 py-2 bg-slate-800/50 rounded-lg border border-slate-700/50">
             <div className="w-2 h-2 rounded-full bg-emerald-500 mr-2 animate-pulse"></div>
-            <span className="text-xs text-slate-400">Server Status: Online</span>
+            <span className="text-xs text-slate-400">서버 상태: 정상</span>
           </div>
         </div>
       </aside>
