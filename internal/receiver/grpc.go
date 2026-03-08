@@ -33,6 +33,11 @@ func (r *GRPCReceiver) Start() error {
 		return fmt.Errorf("grpc listen: %w", err)
 	}
 
+	// Update port with actual port assigned if port was 0
+	if r.port == 0 {
+		r.port = lis.Addr().(*net.TCPAddr).Port
+	}
+
 	r.server = grpc.NewServer()
 	coltracepb.RegisterTraceServiceServer(r.server, &traceService{proc: r.proc})
 	colmetricspb.RegisterMetricsServiceServer(r.server, &metricsService{proc: r.proc})
@@ -46,6 +51,10 @@ func (r *GRPCReceiver) Stop() {
 	if r.server != nil {
 		r.server.GracefulStop()
 	}
+}
+
+func (r *GRPCReceiver) Port() int {
+	return r.port
 }
 
 // --- Trace Service ---
