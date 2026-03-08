@@ -23,7 +23,7 @@ A lightweight Application Performance Monitoring (APM) server written in Go. It 
 - **Language:** Go 1.22+
 - **OTLP Parsing:** Leverages OpenTelemetry Collector's `go.opentelemetry.io/collector/pdata` for robust and efficient payload parsing.
 - **Storage:** SQLite (`modernc.org/sqlite` - CGO-free, WAL mode, daily partitioning)
-- **Web UI:** Vite + (React/Vue/Svelte), compiled to static assets and bundled via Go `embed`.
+- **Web UI:** React + Vite SPA, compiled to static assets and bundled via Go `embed`.
 - **Routing:** Go 1.22 enhanced HTTP routing
 
 ## Getting Started
@@ -34,11 +34,11 @@ A lightweight Application Performance Monitoring (APM) server written in Go. It 
 
 ### Build and Run
 
-1. **Build the binary:**
+1. **Build the binary (includes frontend build):**
    ```bash
-   make build
+   make build-server
    ```
-   This will generate a binary named `apm-server`.
+   This will generate a binary named `go-apm-server`.
 
 2. **Run the server:**
    ```bash
@@ -46,7 +46,12 @@ A lightweight Application Performance Monitoring (APM) server written in Go. It 
    ```
    Or run the binary directly:
    ```bash
-   ./apm-server --config configs/config.yaml
+   ./go-apm-server --config configs/config.yaml
+   ```
+
+3. **Generate sample OTLP data (optional):**
+   ```bash
+   make sample-data
    ```
 
 ### Using Docker
@@ -75,10 +80,18 @@ receiver:
   grpc_port: 4317
   http_port: 4318
 
+processor:
+  batch_size: 1000
+  flush_interval: "2s"
+  queue_size: 10000
+  drop_on_full: true
+
 storage:
   path: "./data/apm.db"
   retention_days: 7
 ```
+
+> `storage.path` can be either a `.db` file path or a directory path. Internally, this project stores data in daily partition files like `apm-YYYY-MM-DD.db` under the base directory.
 
 Environment variables can also override these settings, e.g., `APM_SERVER_API_PORT`, `APM_RECEIVER_GRPC_PORT`.
 
@@ -94,6 +107,13 @@ The server exposes a REST API on port `8080`:
 - `GET /api/stats` - Summary statistics for the dashboard
 - `GET /health` - Health check
 - `GET /metrics` - Exposes Prometheus-formatted internal server and pipeline metrics
+
+### Main query parameters
+
+- `/api/traces`: `service`, `status`, `start`, `end`, `min_duration`, `limit`, `offset`
+- `/api/metrics`: `service`, `name`, `start`, `end`, `limit`
+- `/api/logs`: `service`, `trace_id`, `search`, `severity_min`, `start`, `end`, `limit`, `offset`
+- `/api/stats`: `since`
 
 ## Accessing the Web UI
 
