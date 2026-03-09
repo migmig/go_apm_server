@@ -45,7 +45,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                   </Link>
                   {pageMeta.breadcrumbs.map((item, index) => (
                     <span key={`${item.label}-${index}`} className="inline-flex items-center gap-2">
-                      <ChevronRight size={12} className="shrink-0 text-slate-600" />
+                      <ChevronRight size={12} className="shrink-0 text-slate-500" />
                       {item.to ? (
                         <Link to={item.to} className="transition-colors hover:text-slate-300">
                           {item.label}
@@ -61,7 +61,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
                 <div className="mt-3 flex flex-col gap-2 md:flex-row md:items-end md:justify-between">
                   <div className="min-w-0">
-                    <p className="text-[10px] font-bold uppercase tracking-[0.3em] text-slate-500">
+                    <p className="text-xs font-bold uppercase tracking-[0.3em] text-slate-500">
                       {pageMeta.section}
                     </p>
                     <h1 className="mt-1 truncate text-xl font-semibold text-slate-50 md:text-2xl">

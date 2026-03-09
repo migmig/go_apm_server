@@ -136,8 +136,10 @@ The current Web UI has a documented fix plan and execution task list for the nex
 
 Current UI priorities are:
 
-1. Align navigation and routes, including the `settings` entry.
-2. Add explicit loading, empty, error, retry, and stale-data states.
-3. Rebuild the app shell and screen layouts for mobile and narrow widths.
-4. Improve information hierarchy in traces, logs, and trace detail pages.
-5. Clean up typography, contrast, status colors, and animation usage.
+1. Align navigation and routes, including the `settings` entry. (Completed)
+2. Add explicit loading, empty, error, retry, and stale-data states. (Completed)
+3. Rebuild the app shell and screen layouts for mobile and narrow widths. (Completed)
+4. Improve information hierarchy in traces, logs, and trace detail pages. (Completed)
+5. Clean up typography, contrast, status colors, and animation usage. (Completed)
+
+> Note: All Phase 1~4 UI fixes have been completed, including styling cleanup (typography scaling, contrast ratio adjustments, and consistent component states).

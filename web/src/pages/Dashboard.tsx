@@ -101,7 +101,7 @@ export default function Dashboard() {
           <p className="mt-1 text-sm font-mono uppercase tracking-tighter text-slate-400">모든 서비스 노드의 실시간 상태를 모니터링합니다</p>
         </div>
         <div className="text-left sm:text-right">
-          <p className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">마지막 업데이트</p>
+          <p className="text-xs font-bold text-slate-400 uppercase tracking-widest">마지막 업데이트</p>
           <p className="text-xs text-slate-300 font-mono">
             {lastUpdatedAt ? format(lastUpdatedAt, 'HH:mm:ss') : '미수신'}
           </p>
@@ -148,7 +148,7 @@ export default function Dashboard() {
         {statCards.map((card) => (
           <div key={card.label} className={`bg-[#0f172a] p-6 rounded-xl border ${card.warning ? 'border-rose-500/50' : 'border-slate-800'} shadow-sm relative overflow-hidden group`}>
             <div className="flex items-center justify-between mb-4 relative z-10">
-              <span className="text-xs font-bold text-slate-500 uppercase tracking-wider">{card.label}</span>
+              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{card.label}</span>
               <div className={`${card.bg} ${card.color} p-2 rounded-lg`}>
                 <card.icon size={16} />
               </div>
@@ -178,7 +178,7 @@ export default function Dashboard() {
           </div>
           <div className="h-72">
             {timeSeries.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-xs text-slate-500">데이터가 없습니다.</div>
+              <div className="flex h-full items-center justify-center text-xs text-slate-400">데이터가 없습니다.</div>
             ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={timeSeries}>
@@ -218,7 +218,7 @@ export default function Dashboard() {
           </h2>
           <div className="flex-1 h-72 lg:h-auto">
             {timeSeries.length === 0 ? (
-              <div className="flex h-full items-center justify-center text-xs text-slate-500">데이터가 없습니다.</div>
+              <div className="flex h-full items-center justify-center text-xs text-slate-400">데이터가 없습니다.</div>
             ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={timeSeries}>
@@ -248,25 +248,25 @@ export default function Dashboard() {
       <div className="bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm overflow-hidden">
         <div className="flex items-center justify-between border-b border-slate-800 px-4 py-6 md:px-6 lg:px-8">
           <h2 className="text-lg font-semibold text-slate-200">서비스별 성능 현황</h2>
-          <span className="text-[10px] font-bold text-slate-500 uppercase tracking-widest">전체 데이터 기반</span>
+          <span className="text-xs font-bold text-slate-400 uppercase tracking-widest">전체 데이터 기반</span>
         </div>
         <div className="overflow-x-auto">
           <table className="min-w-full divide-y divide-slate-800">
             <thead className="bg-slate-900/30">
               <tr>
-                <th className="px-4 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest md:px-6 lg:px-8">서비스 이름</th>
-                <th className="px-4 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest md:px-6 lg:px-8">초당 요청(RPS)</th>
-                <th className="px-4 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest md:px-6 lg:px-8">에러율</th>
-                <th className="px-4 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest md:px-6 lg:px-8">평균 응답시간</th>
-                <th className="px-4 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest md:px-6 lg:px-8">상위 5% (p95)</th>
-                <th className="px-4 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest md:px-6 lg:px-8">상위 1% (p99)</th>
-                <th className="px-4 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest md:px-6 lg:px-8">상태</th>
+                <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">서비스 이름</th>
+                <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">초당 요청(RPS)</th>
+                <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">에러율</th>
+                <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">평균 응답시간</th>
+                <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">상위 5% (p95)</th>
+                <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">상위 1% (p99)</th>
+                <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">상태</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {services.length === 0 ? (
                 <tr>
-                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-500 md:px-6 lg:px-8">
+                  <td colSpan={7} className="px-4 py-10 text-center text-sm text-slate-400 md:px-6 lg:px-8">
                     아직 서비스별 성능 데이터가 없습니다.
                   </td>
                 </tr>
@@ -299,11 +299,11 @@ export default function Dashboard() {
                     </td>
                     <td className="whitespace-nowrap px-4 py-4 md:px-6 lg:px-8">
                       {isUnhealthy ? (
-                        <div className="flex items-center text-rose-400 text-[10px] font-bold uppercase tracking-tighter">
+                        <div className="flex items-center text-rose-400 text-xs font-bold uppercase tracking-tighter">
                           <AlertCircle size={14} className="mr-1" /> 위급
                         </div>
                       ) : (
-                        <div className="flex items-center text-emerald-400 text-[10px] font-bold uppercase tracking-tighter">
+                        <div className="flex items-center text-emerald-400 text-xs font-bold uppercase tracking-tighter">
                           정상
                         </div>
                       )}

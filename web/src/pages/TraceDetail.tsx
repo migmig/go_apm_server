@@ -100,8 +100,8 @@ export default function TraceDetail() {
     return { minStart, maxEnd, totalDuration: maxEnd - minStart };
   }, [spans]);
 
-  if (loading) return <div className="flex items-center justify-center h-full text-slate-500 animate-pulse font-mono">요청 구조 재구성 중...</div>;
-  if (spans.length === 0) return <div className="p-8 text-center text-slate-500">요청 ID <span className="font-mono text-slate-300">{traceId}</span>를 찾을 수 없습니다.</div>;
+  if (loading) return <div className="flex items-center justify-center h-full text-slate-400 animate-pulse font-mono">요청 구조 재구성 중...</div>;
+  if (spans.length === 0) return <div className="p-8 text-center text-slate-400">요청 ID <span className="font-mono text-slate-300">{traceId}</span>를 찾을 수 없습니다.</div>;
 
   return (
     <div className="space-y-6">
@@ -114,9 +114,9 @@ export default function TraceDetail() {
           <div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:space-x-3">
               <h1 className="text-lg font-bold text-slate-100 font-mono">{traceId}</h1>
-              <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[10px] font-bold rounded border border-blue-500/20 uppercase tracking-widest">요청 상세</span>
+              <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-xs font-bold rounded border border-blue-500/20 uppercase tracking-widest">요청 상세</span>
             </div>
-            <div className="mt-2 flex flex-col gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:flex-row sm:items-center sm:space-x-4">
+            <div className="mt-2 flex flex-col gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 sm:flex-row sm:items-center sm:space-x-4">
               <span className="flex items-center"><Layers size={12} className="mr-1.5 text-blue-500" /> {spans.length} 개의 작업</span>
               <span className="flex items-center"><Clock size={12} className="mr-1.5 text-blue-500" /> 총 소요 시간: {(traceStats.totalDuration / 1e6).toFixed(2)}ms</span>
             </div>
@@ -128,7 +128,7 @@ export default function TraceDetail() {
         {/* Waterfall Chart */}
         <div className="flex flex-col overflow-x-auto rounded-xl border border-slate-800 bg-[#0f172a] shadow-sm xl:col-span-3 xl:max-h-[72vh]">
           <div className="min-w-[600px] flex flex-col xl:flex-1 h-full">
-          <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex text-[10px] font-bold text-slate-500 uppercase tracking-widest">
+          <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex text-xs font-bold text-slate-400 uppercase tracking-widest">
             <div className="w-1/3 border-r border-slate-800 px-2">서비스 및 작업명</div>
             <div className="w-2/3 px-4 flex justify-between">
               <span>진행 시간표 (Timeline)</span>
@@ -160,7 +160,7 @@ export default function TraceDetail() {
                         {span.depth > 0 && (
                           <div className="absolute left-0 w-px bg-slate-700/50 h-full" style={{ left: `${(span.depth * 16) - 8}px` }}></div>
                         )}
-                        <span className={`text-[9px] font-black uppercase px-1 rounded mr-2 ${getServiceColor(span.service_name)} text-white`}>
+                        <span className={`text-[10px] font-black uppercase px-1 rounded mr-2 ${getServiceColor(span.service_name)} text-white`}>
                           {span.service_name}
                         </span>
                         {hasError && <AlertCircle size={12} className="text-rose-500 shrink-0" />}
@@ -188,7 +188,7 @@ export default function TraceDetail() {
                       }}
                     >
                       {/* Duration label inside or outside based on width */}
-                      <span className={`absolute whitespace-nowrap text-[9px] font-bold font-mono ${width > 15 ? 'left-2 text-white' : 'left-full ml-3 text-slate-500'}`}>
+                      <span className={`absolute whitespace-nowrap text-[10px] font-bold font-mono ${width > 15 ? 'left-2 text-white' : 'left-full ml-3 text-slate-400'}`}>
                         {(span.duration_ns / 1e6).toFixed(2)} ms
                       </span>
                     </div>
@@ -210,36 +210,36 @@ export default function TraceDetail() {
           {selectedSpan ? (
             <div className="flex-1 space-y-6 overflow-y-auto p-5">
               <section>
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest flex items-center">
+                <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-widest flex items-center">
                   <Server size={12} className="mr-2" /> 컨텍스트
                 </h3>
                 <div className="space-y-3">
                   <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-                    <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">서비스</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">서비스</p>
                     <p className="text-sm font-bold text-slate-200">{selectedSpan.service_name}</p>
                   </div>
                   <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
-                    <p className="text-[9px] text-slate-500 font-bold uppercase mb-1">수행 작업</p>
+                    <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">수행 작업</p>
                     <p className="text-sm font-bold text-blue-400 font-mono">{selectedSpan.span_name}</p>
                   </div>
                 </div>
               </section>
 
               <section>
-                <h3 className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest flex items-center">
+                <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-widest flex items-center">
                   <Layers size={12} className="mr-2" /> 부가 정보 (Attributes)
                 </h3>
                 <div className="grid grid-cols-1 gap-2">
                   {Object.entries(selectedSpan.attributes).length > 0 ? (
                     Object.entries(selectedSpan.attributes).map(([k, v]) => (
                       <div key={k} className="flex flex-col bg-slate-900/40 p-2.5 rounded-lg border border-slate-800 group/attr hover:border-slate-700 transition-colors">
-                        <span className="text-[9px] text-indigo-400 font-bold mb-1 uppercase tracking-tighter truncate opacity-80">{k}</span>
+                        <span className="text-[10px] text-indigo-400 font-bold mb-1 uppercase tracking-tighter truncate">{k}</span>
                         <span className="text-slate-300 break-all font-mono text-xs leading-relaxed">{String(v)}</span>
                       </div>
                     ))
                   ) : (
                     <div className="text-center p-8 border border-dashed border-slate-800 rounded-lg">
-                      <p className="text-slate-600 italic text-xs">기록된 부가 정보가 없습니다.</p>
+                      <p className="text-slate-500 italic text-xs">기록된 부가 정보가 없습니다.</p>
                     </div>
                   )}
                 </div>
@@ -248,9 +248,9 @@ export default function TraceDetail() {
           ) : (
             <div className="flex-1 flex flex-col items-center justify-center p-8 text-center">
               <div className="w-12 h-12 bg-slate-800/50 rounded-full flex items-center justify-center mb-4">
-                <Layers className="text-slate-600" size={24} />
+                <Layers className="text-slate-500" size={24} />
               </div>
-              <p className="text-slate-500 text-sm font-medium">타임라인에서 작업을 선택하여 상세 정보를 확인하세요.</p>
+              <p className="text-slate-400 text-sm font-medium">타임라인에서 작업을 선택하여 상세 정보를 확인하세요.</p>
             </div>
           )}
         </div>

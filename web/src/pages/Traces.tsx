@@ -131,7 +131,7 @@ export default function Traces() {
           <p className="text-slate-400 text-sm mt-1">서비스 간의 전체 요청 흐름을 상세히 추적하고 분석합니다.</p>
         </div>
         <div className="text-left sm:text-right">
-          <p className="text-[10px] font-bold uppercase tracking-widest text-slate-500">마지막 조회</p>
+          <p className="text-xs font-bold uppercase tracking-widest text-slate-400">마지막 조회</p>
           <p className="text-xs font-mono text-slate-300">{lastUpdatedAt ? format(lastUpdatedAt, 'HH:mm:ss') : '미수신'}</p>
         </div>
       </div>
@@ -205,21 +205,21 @@ export default function Traces() {
           <table className="min-w-full divide-y divide-slate-800 hidden md:table">
             <thead className="bg-slate-900/50">
               <tr>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">요청 시간</th>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">요청 ID</th>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">시작 서비스</th>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">수행 작업</th>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">소요 시간</th>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">결과</th>
-                <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">부가 정보</th>
-                <th className="px-6 py-4 text-right text-[10px] font-bold text-slate-500 uppercase tracking-widest">관리</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest">요청 시간</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest">요청 ID</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest">시작 서비스</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest">수행 작업</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest">소요 시간</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest">결과</th>
+                <th className="px-6 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest">부가 정보</th>
+                <th className="px-6 py-4 text-right text-xs font-bold text-slate-400 uppercase tracking-widest">관리</th>
               </tr>
             </thead>
             <tbody className="divide-y divide-slate-800">
               {loading && traces.length === 0 ? (
-                <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500 animate-pulse">요청 데이터를 불러오는 중...</td></tr>
+                <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-400 animate-pulse">요청 데이터를 불러오는 중...</td></tr>
               ) : traces.length === 0 ? (
-                <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-500 italic">조건에 맞는 요청이 없습니다.</td></tr>
+                <tr><td colSpan={8} className="px-6 py-12 text-center text-sm text-slate-400 italic">조건에 맞는 요청이 없습니다.</td></tr>
               ) : (
                 <>
                   {traces.map((trace) => (
@@ -246,7 +246,7 @@ export default function Traces() {
                         </div>
                       </td>
                       <td className="px-6 py-4 whitespace-nowrap">
-                        <span className={`px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded-md uppercase tracking-tighter ${
+                        <span className={`px-2 py-0.5 inline-flex text-xs leading-4 font-bold rounded-md uppercase tracking-tighter ${
                           trace.status_code === 2 
                             ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
                             : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
@@ -257,12 +257,12 @@ export default function Traces() {
                       <td className="px-6 py-4">
                         <div className="flex flex-wrap gap-1 max-w-[200px]">
                           {trace.attributes && Object.entries(trace.attributes).slice(0, 3).map(([k, v]) => (
-                            <span key={k} className="inline-flex items-center px-1 py-0.5 rounded text-[8px] bg-slate-800 text-slate-500 border border-slate-700/50 truncate max-w-full">
+                            <span key={k} className="inline-flex items-center px-1 py-0.5 rounded text-[10px] bg-slate-800 text-slate-400 border border-slate-700/50 truncate max-w-full">
                               <span className="text-blue-500/50 mr-0.5">{k}:</span>{String(v)}
                             </span>
                           ))}
                           {trace.attributes && Object.keys(trace.attributes).length > 3 && (
-                            <span className="text-[8px] text-slate-600">+{Object.keys(trace.attributes).length - 3}개 더보기</span>
+                            <span className="text-[10px] text-slate-500">+{Object.keys(trace.attributes).length - 3}개 더보기</span>
                           )}
                         </div>
                       </td>
@@ -285,9 +285,9 @@ export default function Traces() {
           {/* Mobile Card Layout */}
           <div className="md:hidden flex flex-col gap-3 p-4 bg-slate-900/20">
             {loading && traces.length === 0 ? (
-              <div className="p-8 text-center text-sm text-slate-500 animate-pulse">요청 데이터를 불러오는 중...</div>
+              <div className="p-8 text-center text-sm text-slate-400 animate-pulse">요청 데이터를 불러오는 중...</div>
             ) : traces.length === 0 ? (
-              <div className="p-8 text-center text-sm text-slate-500 italic">조건에 맞는 요청이 없습니다.</div>
+              <div className="p-8 text-center text-sm text-slate-400 italic">조건에 맞는 요청이 없습니다.</div>
             ) : (
               traces.map((trace) => (
                 <div key={trace.trace_id} className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 flex flex-col gap-3">
@@ -295,7 +295,7 @@ export default function Traces() {
                     <span className="text-xs text-slate-400 font-mono">
                       {format(trace.start_time / 1e6, 'MMM dd, HH:mm:ss.SSS')}
                     </span>
-                    <span className={`px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded-md uppercase tracking-tighter ${
+                    <span className={`px-2 py-0.5 inline-flex text-xs leading-4 font-bold rounded-md uppercase tracking-tighter ${
                       trace.status_code === 2 
                         ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
                         : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
@@ -360,7 +360,7 @@ export default function Traces() {
         ) : null}
 
         {viewState === 'ready' && !hasMore && traces.length > 0 && (
-          <div className="py-6 text-center text-xs text-slate-500 bg-slate-900/20 border-t border-slate-800">
+          <div className="py-6 text-center text-xs text-slate-400 bg-slate-900/20 border-t border-slate-800">
             모든 데이터를 확인했습니다.
           </div>
         )}

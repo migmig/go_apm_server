@@ -71,7 +71,7 @@ export default function Logs() {
     if (num >= 17) return 'text-rose-400 bg-rose-500/10 border-rose-500/20';
     if (num >= 13) return 'text-amber-400 bg-amber-500/10 border-amber-500/20';
     if (num >= 9) return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
-    return 'text-slate-500 bg-slate-500/10 border-slate-500/20';
+    return 'text-slate-400 bg-slate-500/10 border-slate-500/20';
   };
   const viewState = getAsyncViewState({
     hasData: logs.length > 0,
@@ -92,7 +92,7 @@ export default function Logs() {
         </div>
         <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:space-x-2">
            <div className="text-left sm:mr-4 sm:text-right">
-            <div className="flex items-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
+            <div className="flex items-center text-xs font-bold uppercase tracking-widest text-slate-400">
               <RefreshCcw size={12} className={refreshing ? 'mr-1.5 animate-spin-slow' : 'mr-1.5'} />
               자동 갱신
             </div>
@@ -181,20 +181,20 @@ export default function Logs() {
             logs.map((log, i) => (
               <div key={i} className={`group flex flex-col py-2 px-3 hover:bg-slate-800/40 rounded transition-colors border-l-2 ${getSeverityRowStyle(log.severity_number)}`}>
                 <div className="flex flex-col sm:flex-row sm:items-start sm:space-x-4 mb-1 gap-2 sm:gap-0">
-                  <span className="text-slate-600 shrink-0 select-none hidden sm:block">
+                  <span className="text-slate-500 shrink-0 select-none hidden sm:block">
                     {format(new Date(log.timestamp), 'HH:mm:ss.SSS')}
                   </span>
                   <span className="text-indigo-400 shrink-0 w-32 truncate font-bold">
                     {log.service_name}
                   </span>
-                  <span className={`hidden sm:inline-block px-1.5 py-0.5 rounded shrink-0 w-14 text-center text-[9px] font-black border ${getSeverityBadgeStyle(log.severity_number)}`}>
+                  <span className={`hidden sm:inline-block px-1.5 py-0.5 rounded shrink-0 w-14 text-center text-[10px] font-black border ${getSeverityBadgeStyle(log.severity_number)}`}>
                     {(log.severity_text || 'INFO').toUpperCase()}
                   </span>
                   <div className="flex items-center space-x-2 sm:hidden">
-                    <span className="text-slate-600 shrink-0 select-none">
+                    <span className="text-slate-500 shrink-0 select-none">
                       {format(new Date(log.timestamp), 'HH:mm:ss.SSS')}
                     </span>
-                    <span className={`px-1.5 py-0.5 rounded shrink-0 text-[9px] font-black border ${getSeverityBadgeStyle(log.severity_number)}`}>
+                    <span className={`px-1.5 py-0.5 rounded shrink-0 text-[10px] font-black border ${getSeverityBadgeStyle(log.severity_number)}`}>
                       {(log.severity_text || 'INFO').toUpperCase()}
                     </span>
                   </div>
@@ -205,7 +205,7 @@ export default function Logs() {
                   {log.trace_id && (
                     <Link 
                       to={`/traces/${log.trace_id}`}
-                      className="shrink-0 text-[10px] text-slate-600 hover:text-blue-400 transition-colors border border-slate-800 rounded px-1 group-hover:border-slate-700"
+                      className="shrink-0 text-xs text-slate-500 hover:text-blue-400 transition-colors border border-slate-800 rounded px-1 group-hover:border-slate-700"
                     >
                       요청:{log.trace_id.substring(0,6)}
                     </Link>
@@ -214,9 +214,9 @@ export default function Logs() {
                 {log.attributes && Object.keys(log.attributes).length > 0 && (
                   <div className="mt-2 ml-0 sm:ml-[140px] flex flex-wrap gap-1.5">
                     {Object.entries(log.attributes).map(([k, v]) => (
-                      <span key={k} className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] bg-slate-800/80 text-slate-500 border border-slate-700/50">
+                      <span key={k} className="inline-flex items-center px-1.5 py-0.5 rounded text-[10px] bg-slate-800/80 text-slate-400 border border-slate-700/50">
                         <span className="text-blue-500/70 mr-1">{k}:</span>
-                        <span className="text-slate-400">{String(v)}</span>
+                        <span className="text-slate-300">{String(v)}</span>
                       </span>
                     ))}
                   </div>
