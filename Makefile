@@ -11,7 +11,7 @@ all: build-server
 # Stage 1: Build the frontend (React + Vite)
 build-web:
 	@echo "Building frontend..."
-	cd web && npm install && npm run build
+	cd web && bun install && bun run build
 
 # Stage 2: Build the Go server (embeds frontend)
 # This depends on build-web to ensure web/dist exists for go:embed

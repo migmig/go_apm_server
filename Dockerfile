@@ -1,12 +1,12 @@
 # Stage 1: Build the React frontend
-# Security: Pin to specific Alpine version for reproducible builds
-FROM node:20-alpine3.21 AS frontend-builder
+# Security: Use Debian-based Bun image for better amd64 emulation compatibility
+FROM oven/bun:1.2 AS frontend-builder
 WORKDIR /app/web
-COPY web/package*.json ./
-# Security: Use 'npm ci' instead of 'npm install' for reproducible, locked installs
-RUN npm ci
+COPY web/package.json web/bun.lock ./
+# Security: Use --frozen-lockfile for reproducible, locked installs
+RUN bun install --frozen-lockfile
 COPY web/ ./
-RUN npm run build
+RUN bun run build
 
 # Stage 2: Build the Go backend
 # Security: Pin to specific Alpine version for reproducible builds
