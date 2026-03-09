@@ -1,8 +1,10 @@
-import { useEffect, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import client from '../api/client';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Search, Terminal, RefreshCcw, Filter } from 'lucide-react';
+import { PageEmptyState, PageErrorState, PageLoadingState, StatusBanner } from '../components/PageState';
+import { getAsyncViewState, getErrorMessage } from '../lib/request-state';
 
 interface LogRecord {
   timestamp: string;
@@ -17,30 +19,46 @@ interface LogRecord {
 export default function Logs() {
   const [logs, setLogs] = useState<LogRecord[]>([]);
   const [loading, setLoading] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [serviceName, setServiceName] = useState('');
   const [searchBody, setSearchBody] = useState('');
+  const [errorMessage, setErrorMessage] = useState<string | null>(null);
+  const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
 
-  useEffect(() => {
-    fetchLogs();
-    const interval = setInterval(fetchLogs, 5000);
-    return () => clearInterval(interval);
-  }, []);
+  const fetchLogs = useCallback(async (backgroundRefresh = false) => {
+    if (backgroundRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
 
-  async function fetchLogs() {
     try {
-      const res = await client.get('/logs', { 
-        params: { 
+      const res = await client.get('/logs', {
+        params: {
           service: serviceName,
-          search: searchBody
-        } 
+          search: searchBody,
+        },
       });
       setLogs(res.data.logs || []);
+      setErrorMessage(null);
+      setLastUpdatedAt(new Date());
     } catch (err) {
       console.error('Failed to fetch logs', err);
+      setErrorMessage(getErrorMessage(err, '로그를 불러오지 못했습니다. API 서버 연결을 확인해 주세요.'));
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }
+  }, [searchBody, serviceName]);
+
+  useEffect(() => {
+    void fetchLogs();
+    const interval = setInterval(() => {
+      void fetchLogs(true);
+    }, 5000);
+
+    return () => clearInterval(interval);
+  }, [fetchLogs]);
 
   const getSeverityRowStyle = (num: number) => {
     if (num >= 17) return 'bg-rose-500/5 border-l-rose-500'; // ERROR
@@ -55,10 +73,16 @@ export default function Logs() {
     if (num >= 9) return 'text-blue-400 bg-blue-500/10 border-blue-500/20';
     return 'text-slate-500 bg-slate-500/10 border-slate-500/20';
   };
+  const viewState = getAsyncViewState({
+    hasData: logs.length > 0,
+    isLoading: loading,
+    isEmpty: !loading && logs.length === 0 && !errorMessage,
+    errorMessage,
+  });
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 h-[calc(100vh-120px)] flex flex-col">
-      <div className="flex items-center justify-between">
+    <div className="space-y-6">
+      <div className="flex flex-col gap-4 sm:flex-row sm:items-start sm:justify-between">
         <div>
           <h1 className="text-2xl font-bold text-slate-100 flex items-center">
             <Terminal className="mr-3 text-blue-500" size={24} />
@@ -66,19 +90,32 @@ export default function Logs() {
           </h1>
           <p className="text-slate-400 text-sm mt-1">인프라 전체에서 발생하는 로그를 실시간으로 확인합니다.</p>
         </div>
-        <div className="flex items-center space-x-2">
-           <div className="flex items-center text-[10px] font-bold text-slate-500 uppercase tracking-widest mr-4">
-            <RefreshCcw size={12} className="mr-1.5 animate-spin-slow" />
-            실시간 갱신 중
+        <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:space-x-2">
+           <div className="text-left sm:mr-4 sm:text-right">
+            <div className="flex items-center text-[10px] font-bold uppercase tracking-widest text-slate-500">
+              <RefreshCcw size={12} className={refreshing ? 'mr-1.5 animate-spin-slow' : 'mr-1.5'} />
+              자동 갱신
+            </div>
+            <p className="mt-1 text-xs font-mono text-slate-300">{lastUpdatedAt ? format(lastUpdatedAt, 'HH:mm:ss') : '미수신'}</p>
           </div>
           <button
-            onClick={fetchLogs}
+            onClick={() => void fetchLogs()}
             className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-700"
           >
             지금 갱신
           </button>
         </div>
       </div>
+
+      {errorMessage && logs.length > 0 ? (
+        <StatusBanner
+          tone="warning"
+          title="자동 갱신에 실패해 마지막 정상 로그를 유지하고 있습니다."
+          description={errorMessage}
+          actionLabel="지금 갱신"
+          onAction={() => void fetchLogs()}
+        />
+      ) : null}
 
       <div className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-sm">
         <div className="flex items-center space-x-3 bg-slate-900/50 rounded-lg px-3 border border-slate-800 focus-within:border-blue-500/50 transition-colors">
@@ -101,20 +138,46 @@ export default function Logs() {
             onChange={(e) => setSearchBody(e.target.value)}
           />
         </div>
+        <button
+          onClick={() => void fetchLogs()}
+          className="md:col-span-3 inline-flex items-center justify-center rounded-lg border border-slate-700 bg-slate-900 px-4 py-2 text-sm font-medium text-slate-100 transition-colors hover:border-slate-600 hover:bg-slate-800"
+        >
+          <Search size={16} className="mr-2" />
+          현재 필터로 조회
+        </button>
       </div>
 
-      <div className="flex-1 bg-[#020617] rounded-xl border border-slate-800 shadow-2xl overflow-hidden flex flex-col font-mono text-xs relative">
+      <div className="relative flex min-h-[28rem] flex-col overflow-hidden rounded-xl border border-slate-800 bg-[#020617] font-mono text-xs shadow-2xl lg:min-h-[32rem]">
         <div className="absolute top-0 left-0 w-1 h-full bg-gradient-to-b from-blue-600/50 via-indigo-600/50 to-purple-600/50"></div>
-        <div className="overflow-y-auto p-4 space-y-1 scrollbar-hide">
-          {loading && logs.length === 0 ? (
-             <div className="flex items-center justify-center h-64 text-slate-600 italic">
-               로그 기록을 불러오는 중...
-             </div>
-          ) : logs.length === 0 ? (
-            <div className="flex items-center justify-center h-64 text-slate-600 italic">
-              감지된 로그가 없습니다. 데이터를 기다리는 중...
-            </div>
-          ) : (
+        <div className="max-h-[70vh] overflow-y-auto p-4 space-y-1 scrollbar-hide">
+          {viewState === 'loading' ? (
+            <PageLoadingState
+              className="min-h-[320px] border-0 bg-transparent"
+              title="로그 기록을 불러오는 중입니다"
+              description="실시간 로그 스트림과 검색 결과를 준비하고 있습니다."
+            />
+          ) : null}
+
+          {viewState === 'error' ? (
+            <PageErrorState
+              className="min-h-[320px] border-0 bg-transparent"
+              title="로그를 불러오지 못했습니다"
+              description={errorMessage ?? '잠시 후 다시 시도해 주세요.'}
+              onAction={() => void fetchLogs()}
+            />
+          ) : null}
+
+          {viewState === 'empty' ? (
+            <PageEmptyState
+              className="min-h-[320px] border-0 bg-transparent"
+              title="감지된 로그가 없습니다"
+              description="서비스 이름이나 본문 검색 조건을 조정하거나 잠시 후 다시 확인해 보세요."
+              actionLabel="다시 조회"
+              onAction={() => void fetchLogs()}
+            />
+          ) : null}
+
+          {viewState === 'ready' ? (
             logs.map((log, i) => (
               <div key={i} className={`group flex flex-col py-2 px-3 hover:bg-slate-800/40 rounded transition-colors border-l-2 ${getSeverityRowStyle(log.severity_number)}`}>
                 <div className="flex items-center space-x-4 mb-1">
@@ -140,7 +203,7 @@ export default function Logs() {
                   )}
                 </div>
                 {log.attributes && Object.keys(log.attributes).length > 0 && (
-                  <div className="flex flex-wrap gap-1.5 ml-[180px]">
+                  <div className="ml-0 flex flex-wrap gap-1.5 sm:ml-[180px]">
                     {Object.entries(log.attributes).map(([k, v]) => (
                       <span key={k} className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] bg-slate-800/80 text-slate-500 border border-slate-700/50">
                         <span className="text-blue-500/70 mr-1">{k}:</span>
@@ -151,7 +214,7 @@ export default function Logs() {
                 )}
               </div>
             ))
-          )}
+          ) : null}
         </div>
       </div>
     </div>

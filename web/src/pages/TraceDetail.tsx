@@ -104,19 +104,19 @@ export default function TraceDetail() {
   if (spans.length === 0) return <div className="p-8 text-center text-slate-500">요청 ID <span className="font-mono text-slate-300">{traceId}</span>를 찾을 수 없습니다.</div>;
 
   return (
-    <div className="space-y-6 animate-in fade-in duration-500 flex flex-col h-[calc(100vh-100px)]">
+    <div className="space-y-6">
       {/* Header */}
-      <div className="flex items-center justify-between bg-[#0f172a] p-4 rounded-xl border border-slate-800">
-        <div className="flex items-center space-x-4">
+      <div className="rounded-xl border border-slate-800 bg-[#0f172a] p-4">
+        <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
           <Link to="/traces" className="p-2 hover:bg-slate-800 rounded-lg text-slate-400 hover:text-slate-200 transition-colors">
             <ChevronLeft size={20} />
           </Link>
           <div>
-            <div className="flex items-center space-x-3">
+            <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:space-x-3">
               <h1 className="text-lg font-bold text-slate-100 font-mono">{traceId}</h1>
               <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-[10px] font-bold rounded border border-blue-500/20 uppercase tracking-widest">요청 상세</span>
             </div>
-            <div className="mt-1 flex items-center space-x-4 text-[10px] text-slate-500 font-bold uppercase tracking-wider">
+            <div className="mt-2 flex flex-col gap-2 text-[10px] font-bold uppercase tracking-wider text-slate-500 sm:flex-row sm:items-center sm:space-x-4">
               <span className="flex items-center"><Layers size={12} className="mr-1.5 text-blue-500" /> {spans.length} 개의 작업</span>
               <span className="flex items-center"><Clock size={12} className="mr-1.5 text-blue-500" /> 총 소요 시간: {(traceStats.totalDuration / 1e6).toFixed(2)}ms</span>
             </div>
@@ -124,9 +124,9 @@ export default function TraceDetail() {
         </div>
       </div>
 
-      <div className="grid grid-cols-1 xl:grid-cols-4 gap-6 flex-1 min-h-0">
+      <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
         {/* Waterfall Chart */}
-        <div className="xl:col-span-3 bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm flex flex-col overflow-hidden">
+        <div className="flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-[#0f172a] shadow-sm xl:col-span-3 xl:max-h-[72vh]">
           <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex text-[10px] font-bold text-slate-500 uppercase tracking-widest">
             <div className="w-1/3 border-r border-slate-800 px-2">서비스 및 작업명</div>
             <div className="w-2/3 px-4 flex justify-between">
@@ -135,7 +135,7 @@ export default function TraceDetail() {
             </div>
           </div>
           
-          <div className="flex-1 overflow-y-auto divide-y divide-slate-800/30 scrollbar-hide">
+          <div className="divide-y divide-slate-800/30 overflow-y-auto scrollbar-hide xl:flex-1">
             {flattenedNodes.map((span) => {
               const left = ((span.start_time - traceStats.minStart) / traceStats.totalDuration) * 100;
               const width = Math.max((span.duration_ns / traceStats.totalDuration) * 100, 0.2);
@@ -199,14 +199,14 @@ export default function TraceDetail() {
         </div>
 
         {/* Metadata Sidebar */}
-        <div className="bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm overflow-hidden flex flex-col">
+        <div className="flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-[#0f172a] shadow-sm xl:max-h-[72vh]">
           <div className="p-4 bg-slate-900/50 border-b border-slate-800 flex items-center">
             <Info size={16} className="mr-2 text-blue-400" />
             <h2 className="text-xs font-bold text-slate-200 uppercase tracking-widest">상세 정보 (Metadata)</h2>
           </div>
           
           {selectedSpan ? (
-            <div className="p-5 space-y-6 overflow-y-auto flex-1">
+            <div className="flex-1 space-y-6 overflow-y-auto p-5">
               <section>
                 <h3 className="text-[10px] font-bold text-slate-500 uppercase mb-3 tracking-widest flex items-center">
                   <Server size={12} className="mr-2" /> 컨텍스트

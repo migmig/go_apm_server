@@ -26,6 +26,14 @@ A lightweight Application Performance Monitoring (APM) server written in Go. It 
 - **Web UI:** React + Vite SPA, compiled to static assets and bundled via Go `embed`.
 - **Routing:** Go 1.22 enhanced HTTP routing
 
+## Project Documents
+
+- [Technical spec](./spec.md)
+- [Product requirements](./prd.md)
+- [Implementation task history](./tasks.md)
+- [UI fix plan](./ui-fix-setting-plan.md)
+- [UI fix tasks](./ui-fix-setting-tasks.md)
+
 ## Getting Started
 
 ### Prerequisites
@@ -118,3 +126,18 @@ The server exposes a REST API on port `8080`:
 ## Accessing the Web UI
 
 Once the server is running, access the web UI by navigating to `http://localhost:8080` in your browser.
+
+## UI Improvement Roadmap
+
+The current Web UI has a documented fix plan and execution task list for the next refinement pass.
+
+- `ui-fix-setting-plan.md`: priority, scope, execution phases, and success criteria
+- `ui-fix-setting-tasks.md`: implementation checklist grouped by phase
+
+Current UI priorities are:
+
+1. Align navigation and routes, including the `settings` entry.
+2. Add explicit loading, empty, error, retry, and stale-data states.
+3. Rebuild the app shell and screen layouts for mobile and narrow widths.
+4. Improve information hierarchy in traces, logs, and trace detail pages.
+5. Clean up typography, contrast, status colors, and animation usage.
