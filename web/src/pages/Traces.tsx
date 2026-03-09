@@ -200,8 +200,9 @@ export default function Traces() {
         ) : null}
 
         {viewState === 'ready' ? (
+        <>
         <div className="overflow-x-auto">
-          <table className="min-w-full divide-y divide-slate-800">
+          <table className="min-w-full divide-y divide-slate-800 hidden md:table">
             <thead className="bg-slate-900/50">
               <tr>
                 <th className="px-6 py-4 text-left text-[10px] font-bold text-slate-500 uppercase tracking-widest">요청 시간</th>
@@ -280,7 +281,56 @@ export default function Traces() {
               )}
             </tbody>
           </table>
+          
+          {/* Mobile Card Layout */}
+          <div className="md:hidden flex flex-col gap-3 p-4 bg-slate-900/20">
+            {loading && traces.length === 0 ? (
+              <div className="p-8 text-center text-sm text-slate-500 animate-pulse">요청 데이터를 불러오는 중...</div>
+            ) : traces.length === 0 ? (
+              <div className="p-8 text-center text-sm text-slate-500 italic">조건에 맞는 요청이 없습니다.</div>
+            ) : (
+              traces.map((trace) => (
+                <div key={trace.trace_id} className="bg-slate-900/50 p-4 rounded-lg border border-slate-800 flex flex-col gap-3">
+                  <div className="flex justify-between items-center">
+                    <span className="text-xs text-slate-400 font-mono">
+                      {format(trace.start_time / 1e6, 'MMM dd, HH:mm:ss.SSS')}
+                    </span>
+                    <span className={`px-2 py-0.5 inline-flex text-[10px] leading-4 font-bold rounded-md uppercase tracking-tighter ${
+                      trace.status_code === 2 
+                        ? 'bg-rose-500/10 text-rose-400 border border-rose-500/20' 
+                        : 'bg-emerald-500/10 text-emerald-400 border border-emerald-500/20'
+                    }`}>
+                      {trace.status_code === 2 ? '실패' : '성공'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex flex-col gap-1">
+                    <div className="flex items-center">
+                      <div className="w-2 h-2 rounded-full bg-blue-500 mr-2"></div>
+                      <span className="text-sm font-semibold text-slate-200">{trace.root_service}</span>
+                    </div>
+                    <span className="text-xs text-slate-400">{trace.root_span}</span>
+                  </div>
+                  
+                  <div className="flex justify-between items-center pt-2 border-t border-slate-800/50">
+                    <div className="flex items-center text-xs text-slate-300 font-mono">
+                      <Clock size={12} className="mr-1.5 text-slate-500" />
+                      {trace.duration_ms.toFixed(2)} ms
+                    </div>
+                    <Link 
+                      to={`/traces/${trace.trace_id}`} 
+                      className="inline-flex items-center text-xs font-bold text-blue-400 hover:text-blue-300 transition-colors group/link"
+                    >
+                      상세 보기
+                      <ArrowRight size={14} className="ml-1 group-hover/link:translate-x-1 transition-transform" />
+                    </Link>
+                  </div>
+                </div>
+              ))
+            )}
+          </div>
         </div>
+        </>
         ) : null}
         
         {/* Infinite Scroll Trigger */}

@@ -126,7 +126,8 @@ export default function TraceDetail() {
 
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
         {/* Waterfall Chart */}
-        <div className="flex flex-col overflow-hidden rounded-xl border border-slate-800 bg-[#0f172a] shadow-sm xl:col-span-3 xl:max-h-[72vh]">
+        <div className="flex flex-col overflow-x-auto rounded-xl border border-slate-800 bg-[#0f172a] shadow-sm xl:col-span-3 xl:max-h-[72vh]">
+          <div className="min-w-[600px] flex flex-col xl:flex-1 h-full">
           <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex text-[10px] font-bold text-slate-500 uppercase tracking-widest">
             <div className="w-1/3 border-r border-slate-800 px-2">서비스 및 작업명</div>
             <div className="w-2/3 px-4 flex justify-between">
@@ -146,7 +147,7 @@ export default function TraceDetail() {
                 <div 
                   key={span.span_id} 
                   onClick={() => setSelectedSpan(span)}
-                  className={`flex group cursor-pointer transition-all ${isSelected ? 'bg-blue-600/10' : 'hover:bg-slate-800/30'}`}
+                  className={`flex group cursor-pointer transition-all ${isSelected ? 'bg-blue-600/10 ring-1 ring-inset ring-blue-500/50' : 'hover:bg-slate-800/30'}`}
                 >
                   {/* Operation Info */}
                   <div className="w-1/3 p-3 border-r border-slate-800/50 flex flex-col justify-center min-w-0 relative">
@@ -195,6 +196,7 @@ export default function TraceDetail() {
                 </div>
               );
             })}
+          </div>
           </div>
         </div>
 

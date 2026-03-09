@@ -180,17 +180,26 @@ export default function Logs() {
           {viewState === 'ready' ? (
             logs.map((log, i) => (
               <div key={i} className={`group flex flex-col py-2 px-3 hover:bg-slate-800/40 rounded transition-colors border-l-2 ${getSeverityRowStyle(log.severity_number)}`}>
-                <div className="flex items-center space-x-4 mb-1">
-                  <span className="text-slate-600 shrink-0 select-none">
+                <div className="flex flex-col sm:flex-row sm:items-start sm:space-x-4 mb-1 gap-2 sm:gap-0">
+                  <span className="text-slate-600 shrink-0 select-none hidden sm:block">
                     {format(new Date(log.timestamp), 'HH:mm:ss.SSS')}
                   </span>
                   <span className="text-indigo-400 shrink-0 w-32 truncate font-bold">
                     {log.service_name}
                   </span>
-                  <span className={`px-1.5 py-0.5 rounded shrink-0 w-14 text-center text-[9px] font-black border ${getSeverityBadgeStyle(log.severity_number)}`}>
+                  <span className={`hidden sm:inline-block px-1.5 py-0.5 rounded shrink-0 w-14 text-center text-[9px] font-black border ${getSeverityBadgeStyle(log.severity_number)}`}>
                     {(log.severity_text || 'INFO').toUpperCase()}
                   </span>
-                  <span className="text-slate-300 break-all leading-relaxed flex-1">
+                  <div className="flex items-center space-x-2 sm:hidden">
+                    <span className="text-slate-600 shrink-0 select-none">
+                      {format(new Date(log.timestamp), 'HH:mm:ss.SSS')}
+                    </span>
+                    <span className={`px-1.5 py-0.5 rounded shrink-0 text-[9px] font-black border ${getSeverityBadgeStyle(log.severity_number)}`}>
+                      {(log.severity_text || 'INFO').toUpperCase()}
+                    </span>
+                  </div>
+
+                  <span className="text-slate-300 break-all leading-relaxed flex-1 mt-1 sm:mt-0">
                     {log.body}
                   </span>
                   {log.trace_id && (
@@ -203,7 +212,7 @@ export default function Logs() {
                   )}
                 </div>
                 {log.attributes && Object.keys(log.attributes).length > 0 && (
-                  <div className="ml-0 flex flex-wrap gap-1.5 sm:ml-[180px]">
+                  <div className="mt-2 ml-0 sm:ml-[140px] flex flex-wrap gap-1.5">
                     {Object.entries(log.attributes).map(([k, v]) => (
                       <span key={k} className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] bg-slate-800/80 text-slate-500 border border-slate-700/50">
                         <span className="text-blue-500/70 mr-1">{k}:</span>

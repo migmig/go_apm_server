@@ -153,7 +153,7 @@ export default function Dashboard() {
                 <card.icon size={16} />
               </div>
             </div>
-            <p className={`text-3xl font-bold font-mono tracking-tight relative z-10 ${card.warning ? 'text-rose-400' : 'text-slate-100'}`}>
+            <p className={`text-2xl sm:text-3xl font-bold font-mono tracking-tight relative z-10 ${card.warning ? 'text-rose-400' : 'text-slate-100'}`}>
               {card.value ?? '-'}
             </p>
             {/* Sparkline simulation using TimeSeries data */}
@@ -177,6 +177,9 @@ export default function Dashboard() {
             </h2>
           </div>
           <div className="h-72">
+            {timeSeries.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-xs text-slate-500">데이터가 없습니다.</div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <AreaChart data={timeSeries}>
                 <defs>
@@ -204,6 +207,7 @@ export default function Dashboard() {
                 <Area type="monotone" dataKey="rps" stroke="#3b82f6" fillOpacity={1} fill="url(#colorRps)" strokeWidth={2} />
               </AreaChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
 
@@ -213,6 +217,9 @@ export default function Dashboard() {
             에러 발생률 추이
           </h2>
           <div className="flex-1 h-72 lg:h-auto">
+            {timeSeries.length === 0 ? (
+              <div className="flex h-full items-center justify-center text-xs text-slate-500">데이터가 없습니다.</div>
+            ) : (
             <ResponsiveContainer width="100%" height="100%">
               <LineChart data={timeSeries}>
                 <CartesianGrid strokeDasharray="3 3" vertical={false} stroke="#1e293b" />
@@ -233,6 +240,7 @@ export default function Dashboard() {
                 <Line type="monotone" dataKey="error_rate" stroke="#f43f5e" strokeWidth={2} dot={false} />
               </LineChart>
             </ResponsiveContainer>
+            )}
           </div>
         </div>
       </div>
