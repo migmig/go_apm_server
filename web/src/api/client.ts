@@ -54,10 +54,41 @@ export interface LogRecord {
   attributes: Record<string, any>;
 }
 
+export interface AppConfig {
+  server: { api_port: number };
+  receiver: { grpc_port: number; http_port: number };
+  processor: {
+    batch_size: number;
+    flush_interval: string;
+    queue_size: number;
+    drop_on_full: boolean;
+  };
+  storage: { path: string; retention_days: number };
+}
+
+export interface SystemInfo {
+  version: string;
+  go_version: string;
+  os: string;
+  arch: string;
+  uptime_seconds: number;
+  data_dir_size_bytes: number;
+}
+
+export interface PartitionInfo {
+  date: string;
+  size_bytes: number;
+  file_path: string;
+}
+
 export const api = {
   getServices: () => client.get<{services: ServiceInfo[]}>('/services').then(res => res.data.services),
+  getServiceByName: (name: string) => client.get<ServiceInfo>(`/services/${encodeURIComponent(name)}`).then(res => res.data),
   getStats: (since?: string) => client.get<Stats>('/stats', { params: { since } }).then(res => res.data),
   getHealth: () => client.get('/health').then(res => res.data),
+  getConfig: () => client.get<AppConfig>('/config').then(res => res.data),
+  getSystem: () => client.get<SystemInfo>('/system').then(res => res.data),
+  getPartitions: () => client.get<{partitions: PartitionInfo[]}>('/partitions').then(res => res.data.partitions),
 };
 
 export default client;

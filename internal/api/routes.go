@@ -8,18 +8,23 @@ import (
 	"strings"
 	"time"
 
+	"github.com/migmig/go_apm_server/internal/config"
 	"github.com/migmig/go_apm_server/internal/storage"
 	"github.com/migmig/go_apm_server/web"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func NewServer(port int, store storage.Storage) *http.Server {
-	h := NewHandler(store)
+func NewServer(port int, store storage.Storage, cfg *config.Config) *http.Server {
+	h := NewHandler(store, cfg)
 
 	mux := http.NewServeMux()
 	mux.Handle("GET /metrics", promhttp.Handler())
 	mux.HandleFunc("GET /health", h.HandleHealth)
+	mux.HandleFunc("GET /api/config", h.HandleGetConfig)
+	mux.HandleFunc("GET /api/system", h.HandleGetSystem)
+	mux.HandleFunc("GET /api/partitions", h.HandleGetPartitions)
 	mux.HandleFunc("GET /api/services", h.HandleGetServices)
+	mux.HandleFunc("GET /api/services/{serviceName}", h.HandleGetServiceDetail)
 	mux.HandleFunc("GET /api/traces", h.HandleGetTraces)
 	mux.HandleFunc("GET /api/traces/{traceId}", h.HandleGetTraceDetail)
 	mux.HandleFunc("GET /api/metrics", h.HandleGetMetrics)

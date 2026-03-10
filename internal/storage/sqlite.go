@@ -27,8 +27,10 @@ type Storage interface {
 	QueryLogs(ctx context.Context, filter LogFilter) ([]LogRecord, int64, error)
 
 	GetServices(ctx context.Context) ([]ServiceInfo, error)
+	GetServiceByName(ctx context.Context, name string) (*ServiceInfo, error)
 	GetStats(ctx context.Context, sinceNano int64) (*Stats, error)
 
+	GetPartitions() ([]PartitionInfo, error)
 	DeleteOldPartitions(ctx context.Context, retentionDays int) (int64, error)
 	Close() error
 }
@@ -69,6 +71,21 @@ func NewSQLite(ctx context.Context, basePath string) (*SQLiteStorage, error) {
 	_, err := s.getDB(ctx, time.Now())
 	if err != nil {
 		return nil, fmt.Errorf("init today db: %w", err)
+	}
+
+	// Open all existing partition DBs so queries span all dates
+	entries, _ := os.ReadDir(dir)
+	for _, e := range entries {
+		if e.IsDir() {
+			continue
+		}
+		name := e.Name()
+		if strings.HasPrefix(name, "apm-") && strings.HasSuffix(name, ".db") && !strings.Contains(name, "-shm") && !strings.Contains(name, "-wal") {
+			dateStr := name[4 : len(name)-3]
+			if t, err := time.Parse("2006-01-02", dateStr); err == nil {
+				s.getDB(ctx, t)
+			}
+		}
 	}
 
 	return s, nil
@@ -768,6 +785,79 @@ func (s *SQLiteStorage) GetServices(ctx context.Context) ([]ServiceInfo, error) 
 
 	return services, nil
 }
+func (s *SQLiteStorage) GetServiceByName(ctx context.Context, name string) (*ServiceInfo, error) {
+	var svc *ServiceInfo
+	var allDurations []int64
+
+	dbs := s.getAllDBs()
+	for _, db := range dbs {
+		var spanCount, errorCount, totalDurationNs int64
+		err := db.QueryRowContext(ctx, `
+			SELECT COUNT(*),
+				   COALESCE(SUM(CASE WHEN status_code = 2 THEN 1 ELSE 0 END), 0),
+				   COALESCE(SUM(duration_ns), 0)
+			FROM spans
+			WHERE service_name = ?`, name).Scan(&spanCount, &errorCount, &totalDurationNs)
+		if err != nil {
+			return nil, fmt.Errorf("query service by name: %w", err)
+		}
+
+		if spanCount == 0 {
+			continue
+		}
+
+		if svc == nil {
+			svc = &ServiceInfo{
+				Name:       name,
+				SpanCount:  spanCount,
+				ErrorCount: errorCount,
+				AvgLatency: float64(totalDurationNs),
+			}
+		} else {
+			svc.SpanCount += spanCount
+			svc.ErrorCount += errorCount
+			svc.AvgLatency += float64(totalDurationNs)
+		}
+
+		rows, err := db.QueryContext(ctx, `SELECT duration_ns FROM spans WHERE service_name = ? AND parent_span_id = ''`, name)
+		if err == nil {
+			for rows.Next() {
+				var d int64
+				if err := rows.Scan(&d); err == nil {
+					allDurations = append(allDurations, d)
+				}
+			}
+			rows.Close()
+		}
+	}
+
+	if svc == nil {
+		return nil, nil
+	}
+
+	if svc.SpanCount > 0 {
+		svc.AvgLatency = (svc.AvgLatency / float64(svc.SpanCount)) / 1e6
+	}
+
+	if len(allDurations) > 0 {
+		sort.Slice(allDurations, func(i, j int) bool { return allDurations[i] < allDurations[j] })
+
+		p95Idx := int(math.Ceil(float64(len(allDurations))*0.95)) - 1
+		if p95Idx < 0 {
+			p95Idx = 0
+		}
+		svc.P95Latency = float64(allDurations[p95Idx]) / 1e6
+
+		p99Idx := int(math.Ceil(float64(len(allDurations))*0.99)) - 1
+		if p99Idx < 0 {
+			p99Idx = 0
+		}
+		svc.P99Latency = float64(allDurations[p99Idx]) / 1e6
+	}
+
+	return svc, nil
+}
+
 func (s *SQLiteStorage) GetStats(ctx context.Context, sinceNano int64) (*Stats, error) {
 	stats := &Stats{}
 	var totalErrors int64
@@ -879,6 +969,47 @@ func (s *SQLiteStorage) GetStats(ctx context.Context, sinceNano int64) (*Stats, 
 	}
 
 	return stats, nil
+}
+
+func (s *SQLiteStorage) GetPartitions() ([]PartitionInfo, error) {
+	files, err := os.ReadDir(s.basePath)
+	if err != nil {
+		return nil, fmt.Errorf("read data dir: %w", err)
+	}
+
+	var partitions []PartitionInfo
+	for _, f := range files {
+		name := f.Name()
+		if !strings.HasPrefix(name, "apm-") || !strings.HasSuffix(name, ".db") {
+			continue
+		}
+		if strings.Contains(name, "-shm") || strings.Contains(name, "-wal") {
+			continue
+		}
+
+		dateStr := strings.TrimSuffix(strings.TrimPrefix(name, "apm-"), ".db")
+		if _, err := time.Parse("2006-01-02", dateStr); err != nil {
+			continue
+		}
+
+		filePath := filepath.Join(s.basePath, name)
+		var sizeBytes int64
+		if info, err := f.Info(); err == nil {
+			sizeBytes = info.Size()
+		}
+
+		partitions = append(partitions, PartitionInfo{
+			Date:      dateStr,
+			SizeBytes: sizeBytes,
+			FilePath:  filePath,
+		})
+	}
+
+	sort.Slice(partitions, func(i, j int) bool {
+		return partitions[i].Date > partitions[j].Date // 최신 날짜 우선
+	})
+
+	return partitions, nil
 }
 
 func (s *SQLiteStorage) DeleteOldPartitions(ctx context.Context, retentionDays int) (int64, error) {

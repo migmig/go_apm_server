@@ -51,7 +51,7 @@ func main() {
 	}
 	log.Printf("HTTP Receiver started on :%d\n", cfg.Receiver.HTTPPort)
 
-	apiServer := api.NewServer(cfg.Server.APIPort, store)
+	apiServer := api.NewServer(cfg.Server.APIPort, store, cfg)
 	go func() {
 		if err := apiServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("api server error: %v", err)

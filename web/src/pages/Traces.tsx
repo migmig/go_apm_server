@@ -1,8 +1,8 @@
 import { useEffect, useState, useCallback, useRef } from 'react';
 import client from '../api/client';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Search, RefreshCw, Clock, ArrowRight, Loader2 } from 'lucide-react';
+import { Search, RefreshCw, Clock, ArrowRight, Loader2, CalendarDays, X } from 'lucide-react';
 import { PageEmptyState, PageErrorState, PageLoadingState, StatusBanner } from '../components/PageState';
 import { getAsyncViewState, getErrorMessage } from '../lib/request-state';
 
@@ -20,6 +20,7 @@ interface TraceSummary {
 const PAGE_SIZE = 50;
 
 export default function Traces() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [traces, setTraces] = useState<TraceSummary[]>([]);
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
@@ -31,6 +32,14 @@ export default function Traces() {
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const observer = useRef<IntersectionObserver | null>(null);
 
+  const startParam = searchParams.get('start');
+  const endParam = searchParams.get('end');
+  const dateLabel = searchParams.get('date');
+
+  const clearDateFilter = () => {
+    setSearchParams({});
+  };
+
   const fetchTraces = useCallback(async () => {
     setLoading(true);
     setOffset(0);
@@ -38,13 +47,15 @@ export default function Traces() {
     setLoadMoreError(null);
 
     try {
-      const res = await client.get('/traces', {
-        params: {
-          service: serviceName,
-          limit: PAGE_SIZE,
-          offset: 0,
-        },
-      });
+      const params: Record<string, any> = {
+        service: serviceName,
+        limit: PAGE_SIZE,
+        offset: 0,
+      };
+      if (startParam) params.start = startParam;
+      if (endParam) params.end = endParam;
+
+      const res = await client.get('/traces', { params });
       const data = res.data.traces || [];
       setTraces(data);
       setHasMore(data.length >= PAGE_SIZE);
@@ -56,7 +67,7 @@ export default function Traces() {
     } finally {
       setLoading(false);
     }
-  }, [serviceName]);
+  }, [serviceName, startParam, endParam]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) {
@@ -68,13 +79,15 @@ export default function Traces() {
     const nextOffset = offset + PAGE_SIZE;
 
     try {
-      const res = await client.get('/traces', {
-        params: {
-          service: serviceName,
-          limit: PAGE_SIZE,
-          offset: nextOffset,
-        },
-      });
+      const params: Record<string, any> = {
+        service: serviceName,
+        limit: PAGE_SIZE,
+        offset: nextOffset,
+      };
+      if (startParam) params.start = startParam;
+      if (endParam) params.end = endParam;
+
+      const res = await client.get('/traces', { params });
       const newData = res.data.traces || [];
 
       if (newData.length === 0) {
@@ -92,7 +105,7 @@ export default function Traces() {
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore, offset, serviceName]);
+  }, [hasMore, loadingMore, offset, serviceName, startParam, endParam]);
 
   const lastElementRef = useCallback((node: HTMLDivElement | null) => {
     if (loading || loadingMore) return;
@@ -160,6 +173,22 @@ export default function Traces() {
           </span>
         </button>
       </div>
+
+      {dateLabel && (
+        <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-2.5">
+          <CalendarDays size={16} className="text-blue-400" />
+          <span className="text-sm text-blue-300 font-medium">
+            <span className="font-bold">{dateLabel}</span> 파티션 데이터를 조회하고 있습니다
+          </span>
+          <button
+            onClick={clearDateFilter}
+            className="ml-auto flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors bg-slate-800 rounded px-2 py-1 border border-slate-700"
+          >
+            <X size={12} />
+            필터 해제
+          </button>
+        </div>
+      )}
 
       {errorMessage && traces.length > 0 ? (
         <StatusBanner

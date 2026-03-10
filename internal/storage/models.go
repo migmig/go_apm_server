@@ -92,6 +92,12 @@ type StatsDataPoint struct {
 	ErrorRate float64 `json:"error_rate"`
 }
 
+type PartitionInfo struct {
+	Date      string `json:"date"`
+	SizeBytes int64  `json:"size_bytes"`
+	FilePath  string `json:"file_path"`
+}
+
 type TraceFilter struct {
 	ServiceName string
 	MinDuration time.Duration

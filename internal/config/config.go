@@ -8,31 +8,31 @@ import (
 )
 
 type Config struct {
-	Server    ServerConfig    `yaml:"server"`
-	Receiver  ReceiverConfig  `yaml:"receiver"`
-	Processor ProcessorConfig `yaml:"processor"`
-	Storage   StorageConfig   `yaml:"storage"`
+	Server    ServerConfig    `yaml:"server"    json:"server"`
+	Receiver  ReceiverConfig  `yaml:"receiver"  json:"receiver"`
+	Processor ProcessorConfig `yaml:"processor" json:"processor"`
+	Storage   StorageConfig   `yaml:"storage"   json:"storage"`
 }
 
 type ServerConfig struct {
-	APIPort int `yaml:"api_port"`
+	APIPort int `yaml:"api_port" json:"api_port"`
 }
 
 type ReceiverConfig struct {
-	GRPCPort int `yaml:"grpc_port"`
-	HTTPPort int `yaml:"http_port"`
+	GRPCPort int `yaml:"grpc_port" json:"grpc_port"`
+	HTTPPort int `yaml:"http_port" json:"http_port"`
 }
 
 type ProcessorConfig struct {
-	BatchSize     int    `yaml:"batch_size"`
-	FlushInterval string `yaml:"flush_interval"`
-	QueueSize     int    `yaml:"queue_size"`
-	DropOnFull    bool   `yaml:"drop_on_full"`
+	BatchSize     int    `yaml:"batch_size"     json:"batch_size"`
+	FlushInterval string `yaml:"flush_interval" json:"flush_interval"`
+	QueueSize     int    `yaml:"queue_size"     json:"queue_size"`
+	DropOnFull    bool   `yaml:"drop_on_full"   json:"drop_on_full"`
 }
 
 type StorageConfig struct {
-	Path          string `yaml:"path"`
-	RetentionDays int    `yaml:"retention_days"`
+	Path          string `yaml:"path"           json:"path"`
+	RetentionDays int    `yaml:"retention_days" json:"retention_days"`
 }
 
 func defaults() Config {

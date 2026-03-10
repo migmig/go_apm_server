@@ -2,23 +2,80 @@ package api
 
 import (
 	"encoding/json"
+	"io/fs"
 	"net/http"
+	"path/filepath"
+	"runtime"
 	"strconv"
 	"time"
 
+	"github.com/migmig/go_apm_server/internal/config"
 	"github.com/migmig/go_apm_server/internal/storage"
 )
 
 type Handler struct {
-	store storage.Storage
+	store     storage.Storage
+	cfg       *config.Config
+	startTime time.Time
 }
 
-func NewHandler(store storage.Storage) *Handler {
-	return &Handler{store: store}
+func NewHandler(store storage.Storage, cfg *config.Config) *Handler {
+	return &Handler{store: store, cfg: cfg, startTime: time.Now()}
 }
 
 func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {
 	writeJSON(w, http.StatusOK, map[string]string{"status": "ok"})
+}
+
+func (h *Handler) HandleGetConfig(w http.ResponseWriter, r *http.Request) {
+	if h.cfg == nil {
+		writeJSON(w, http.StatusOK, map[string]any{})
+		return
+	}
+	writeJSON(w, http.StatusOK, h.cfg)
+}
+
+func (h *Handler) HandleGetSystem(w http.ResponseWriter, r *http.Request) {
+	var dataSize int64
+	if h.cfg != nil {
+		dataSize = calcDirSize(filepath.Dir(h.cfg.Storage.Path))
+	}
+
+	writeJSON(w, http.StatusOK, map[string]any{
+		"version":             "v0.1.0-alpha",
+		"go_version":          runtime.Version(),
+		"os":                  runtime.GOOS,
+		"arch":                runtime.GOARCH,
+		"uptime_seconds":      int(time.Since(h.startTime).Seconds()),
+		"data_dir_size_bytes": dataSize,
+	})
+}
+
+func (h *Handler) HandleGetPartitions(w http.ResponseWriter, r *http.Request) {
+	partitions, err := h.store.GetPartitions()
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if partitions == nil {
+		partitions = []storage.PartitionInfo{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"partitions": partitions})
+}
+
+func calcDirSize(dir string) int64 {
+	var size int64
+	filepath.WalkDir(dir, func(_ string, d fs.DirEntry, err error) error {
+		if err != nil || d.IsDir() {
+			return nil
+		}
+		info, err := d.Info()
+		if err == nil {
+			size += info.Size()
+		}
+		return nil
+	})
+	return size
 }
 
 func (h *Handler) HandleGetServices(w http.ResponseWriter, r *http.Request) {
@@ -31,6 +88,26 @@ func (h *Handler) HandleGetServices(w http.ResponseWriter, r *http.Request) {
 		services = []storage.ServiceInfo{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"services": services})
+}
+
+func (h *Handler) HandleGetServiceDetail(w http.ResponseWriter, r *http.Request) {
+	serviceName := r.PathValue("serviceName")
+	if serviceName == "" {
+		writeError(w, http.StatusBadRequest, "serviceName required")
+		return
+	}
+
+	svc, err := h.store.GetServiceByName(r.Context(), serviceName)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if svc == nil {
+		writeError(w, http.StatusNotFound, "service not found")
+		return
+	}
+
+	writeJSON(w, http.StatusOK, svc)
 }
 
 func (h *Handler) HandleGetTraces(w http.ResponseWriter, r *http.Request) {
@@ -92,19 +169,19 @@ func (h *Handler) HandleGetTraceDetail(w http.ResponseWriter, r *http.Request) {
 	}
 
 	type spanResp struct {
-		SpanID             string         `json:"span_id"`
-		ParentSpanID       string         `json:"parent_span_id"`
-		ServiceName        string         `json:"service_name"`
-		SpanName           string         `json:"span_name"`
-		SpanKind           int32          `json:"span_kind"`
-		StartTime          int64          `json:"start_time"`
-		EndTime            int64          `json:"end_time"`
-		DurationMs         float64        `json:"duration_ms"`
-		StatusCode         int32          `json:"status_code"`
-		StatusMessage      string         `json:"status_message"`
-		Attributes         map[string]any `json:"attributes"`
+		SpanID             string              `json:"span_id"`
+		ParentSpanID       string              `json:"parent_span_id"`
+		ServiceName        string              `json:"service_name"`
+		SpanName           string              `json:"span_name"`
+		SpanKind           int32               `json:"span_kind"`
+		StartTime          int64               `json:"start_time"`
+		EndTime            int64               `json:"end_time"`
+		DurationMs         float64             `json:"duration_ms"`
+		StatusCode         int32               `json:"status_code"`
+		StatusMessage      string              `json:"status_message"`
+		Attributes         map[string]any      `json:"attributes"`
 		Events             []storage.SpanEvent `json:"events"`
-		ResourceAttributes map[string]any `json:"resource_attributes"`
+		ResourceAttributes map[string]any      `json:"resource_attributes"`
 	}
 
 	respSpans := make([]spanResp, 0, len(spans))

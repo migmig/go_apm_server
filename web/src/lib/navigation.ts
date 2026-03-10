@@ -78,6 +78,21 @@ export function getPageMeta(pathname: string): PageMeta {
     };
   }
 
+  if (pathname.startsWith('/services/')) {
+    const serviceName = decodeURIComponent(pathname.split('/')[2] || '');
+
+    return {
+      title: serviceName || '서비스 상세',
+      section: 'Monitoring',
+      description: '서비스의 성능 지표와 최근 트레이스, 로그를 확인합니다.',
+      breadcrumbs: [
+        { label: '모니터링' },
+        { label: '대시보드', to: '/' },
+        { label: serviceName || '서비스 상세' },
+      ],
+    };
+  }
+
   if (pathname === '/logs') {
     return {
       title: '로그 기록',

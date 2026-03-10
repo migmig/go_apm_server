@@ -12,7 +12,7 @@ interface Span {
   span_name: string;
   start_time: number;
   end_time: number;
-  duration_ns: number;
+  duration_ms: number;
   status_code: number;
   attributes: Record<string, any>;
 }
@@ -138,8 +138,8 @@ export default function TraceDetail() {
           
           <div className="divide-y divide-slate-800/30 overflow-y-auto scrollbar-hide xl:flex-1">
             {flattenedNodes.map((span) => {
-              const left = ((span.start_time - traceStats.minStart) / traceStats.totalDuration) * 100;
-              const width = Math.max((span.duration_ns / traceStats.totalDuration) * 100, 0.2);
+              const left = traceStats.totalDuration > 0 ? ((span.start_time - traceStats.minStart) / traceStats.totalDuration) * 100 : 0;
+              const width = traceStats.totalDuration > 0 ? Math.max(((span.duration_ms * 1e6) / traceStats.totalDuration) * 100, 0.2) : 0.2;
               const isSelected = selectedSpan?.span_id === span.span_id;
               const hasError = span.status_code === 2;
               
@@ -189,7 +189,7 @@ export default function TraceDetail() {
                     >
                       {/* Duration label inside or outside based on width */}
                       <span className={`absolute whitespace-nowrap text-[10px] font-bold font-mono ${width > 15 ? 'left-2 text-white' : 'left-full ml-3 text-slate-400'}`}>
-                        {(span.duration_ns / 1e6).toFixed(2)} ms
+                        {span.duration_ms.toFixed(2)} ms
                       </span>
                     </div>
                   </div>

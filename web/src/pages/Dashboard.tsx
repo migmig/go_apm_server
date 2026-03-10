@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Link } from 'react-router-dom';
 import { api, Stats, ServiceInfo } from '../api/client';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer, AreaChart, Area } from 'recharts';
 import { Activity, AlertCircle, Clock, Zap } from 'lucide-react';
@@ -279,7 +280,9 @@ export default function Dashboard() {
                     <td className="whitespace-nowrap px-4 py-4 md:px-6 lg:px-8">
                       <div className="flex items-center">
                         <div className={`w-2 h-2 rounded-full mr-3 ${isUnhealthy ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></div>
-                        <span className="text-sm font-bold text-slate-200">{svc.name}</span>
+                        <Link to={`/services/${svc.name}`} className="text-sm font-bold text-slate-200 hover:text-blue-400 transition-colors">
+                          {svc.name}
+                        </Link>
                       </div>
                     </td>
                     <td className="whitespace-nowrap px-4 py-4 font-mono text-sm text-slate-400 md:px-6 lg:px-8">

@@ -8,8 +8,23 @@ import (
 	"path/filepath"
 	"testing"
 
+	"github.com/migmig/go_apm_server/internal/config"
 	"github.com/migmig/go_apm_server/internal/storage"
 )
+
+func testConfig() *config.Config {
+	return &config.Config{
+		Server:   config.ServerConfig{APIPort: 8080},
+		Receiver: config.ReceiverConfig{GRPCPort: 4317, HTTPPort: 4318},
+		Processor: config.ProcessorConfig{
+			BatchSize:     1000,
+			FlushInterval: "2s",
+			QueueSize:     10000,
+			DropOnFull:    true,
+		},
+		Storage: config.StorageConfig{Path: "./data/apm.db", RetentionDays: 7},
+	}
+}
 
 func setupTestServer(t *testing.T) (*Handler, *storage.SQLiteStorage) {
 	t.Helper()
@@ -29,7 +44,7 @@ func setupTestServer(t *testing.T) (*Handler, *storage.SQLiteStorage) {
 		{ServiceName: "test-svc", SeverityNumber: 9, SeverityText: "INFO", Body: "test log", Timestamp: 1000000000, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
 	})
 
-	return NewHandler(db), db
+	return NewHandler(db, testConfig()), db
 }
 
 func TestHealthEndpoint(t *testing.T) {
@@ -137,6 +152,42 @@ func TestLogsEndpoint(t *testing.T) {
 	}
 }
 
+func TestServiceDetailEndpoint(t *testing.T) {
+	h, _ := setupTestServer(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/services/{serviceName}", h.HandleGetServiceDetail)
+
+	req := httptest.NewRequest("GET", "/api/services/test-svc", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	var resp storage.ServiceInfo
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Name != "test-svc" {
+		t.Errorf("expected test-svc, got %s", resp.Name)
+	}
+	if resp.SpanCount != 2 {
+		t.Errorf("expected 2 spans, got %d", resp.SpanCount)
+	}
+}
+
+func TestServiceDetailNotFound(t *testing.T) {
+	h, _ := setupTestServer(t)
+	mux := http.NewServeMux()
+	mux.HandleFunc("GET /api/services/{serviceName}", h.HandleGetServiceDetail)
+
+	req := httptest.NewRequest("GET", "/api/services/nonexistent", nil)
+	w := httptest.NewRecorder()
+	mux.ServeHTTP(w, req)
+
+	if w.Code != 404 {
+		t.Errorf("expected 404, got %d", w.Code)
+	}
+}
+
 func TestStatsEndpoint(t *testing.T) {
 	h, _ := setupTestServer(t)
 	req := httptest.NewRequest("GET", "/api/stats?since=0", nil)
@@ -153,5 +204,49 @@ func TestStatsEndpoint(t *testing.T) {
 	}
 	if resp.TotalLogs != 1 {
 		t.Errorf("expected 1 log, got %d", resp.TotalLogs)
+	}
+}
+
+func TestConfigEndpoint(t *testing.T) {
+	h, _ := setupTestServer(t)
+	req := httptest.NewRequest("GET", "/api/config", nil)
+	w := httptest.NewRecorder()
+	h.HandleGetConfig(w, req)
+
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	var resp config.Config
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp.Server.APIPort != 8080 {
+		t.Errorf("expected api_port 8080, got %d", resp.Server.APIPort)
+	}
+	if resp.Receiver.GRPCPort != 4317 {
+		t.Errorf("expected grpc_port 4317, got %d", resp.Receiver.GRPCPort)
+	}
+	if resp.Storage.RetentionDays != 7 {
+		t.Errorf("expected retention_days 7, got %d", resp.Storage.RetentionDays)
+	}
+}
+
+func TestSystemEndpoint(t *testing.T) {
+	h, _ := setupTestServer(t)
+	req := httptest.NewRequest("GET", "/api/system", nil)
+	w := httptest.NewRecorder()
+	h.HandleGetSystem(w, req)
+
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	var resp map[string]any
+	json.NewDecoder(w.Body).Decode(&resp)
+	if resp["version"] != "v0.1.0-alpha" {
+		t.Errorf("expected v0.1.0-alpha, got %v", resp["version"])
+	}
+	if resp["go_version"] == nil || resp["go_version"] == "" {
+		t.Error("expected go_version to be present")
+	}
+	if resp["uptime_seconds"] == nil {
+		t.Error("expected uptime_seconds to be present")
 	}
 }
