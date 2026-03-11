@@ -78,6 +78,37 @@ export function getTraceStatusStyle(statusCode: number): TraceStatusStyle {
 }
 
 // ---------------------------------------------------------------------------
+// 건강 상태 (Health Status)
+// ---------------------------------------------------------------------------
+
+export interface HealthStyle {
+    text: string;
+    bg: string;
+    border: string;
+    pulse: string;
+    icon: string;
+}
+
+export function getHealthStyle(isUnhealthy: boolean): HealthStyle {
+    if (isUnhealthy) {
+        return {
+            text: 'text-rose-400',
+            bg: 'bg-rose-500/10',
+            border: 'border-rose-500/30',
+            pulse: 'bg-rose-500 animate-pulse',
+            icon: 'text-rose-500',
+        };
+    }
+    return {
+        text: 'text-emerald-400',
+        bg: 'bg-emerald-500/10',
+        border: 'border-emerald-500/30',
+        pulse: 'bg-emerald-500',
+        icon: 'text-emerald-500',
+    };
+}
+
+// ---------------------------------------------------------------------------
 // 서비스 색상 (Service Color)
 // ---------------------------------------------------------------------------
 

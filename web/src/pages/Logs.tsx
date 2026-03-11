@@ -12,8 +12,9 @@ import toast from 'react-hot-toast';
 import LogAttributes from '../components/ui/LogAttributes';
 import HighlightText from '../components/ui/HighlightText';
 import CopyButton from '../components/ui/CopyButton';
+import SeverityDistributionChart from '../components/logs/SeverityDistributionChart';
 
-interface LogRecord {
+export interface LogRecord {
   timestamp: string;
   service_name: string;
   severity_text: string;
@@ -213,11 +214,13 @@ export default function Logs() {
         ) : null}
 
         {viewState === 'ready' ? (
-          <Virtuoso
-            data={logs}
-            followOutput={streaming ? 'smooth' : false}
-            style={{ height: '70vh' }}
-            className="p-4 scrollbar-hide"
+          <>
+            <SeverityDistributionChart logs={logs} />
+            <Virtuoso
+              data={logs}
+              followOutput={streaming ? 'smooth' : false}
+              style={{ height: 'calc(70vh - 6rem)' }}
+              className="p-4 scrollbar-hide"
             itemContent={(index, log) => (
               <div className={`group flex flex-col py-2 px-3 hover:bg-slate-800/40 rounded transition-colors border-l-2 mb-1 ${getLogSeverityStyle(log.severity_number).row}`}>
                 <div className="flex flex-col sm:flex-row sm:items-start sm:space-x-4 mb-1 gap-2 sm:gap-0">
@@ -262,6 +265,7 @@ export default function Logs() {
               </div>
             )}
           />
+          </>
         ) : null}
       </div>
     </div>

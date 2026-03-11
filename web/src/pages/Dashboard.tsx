@@ -9,6 +9,7 @@ import { getAsyncViewState, getErrorMessage } from '../lib/request-state';
 import { useWSChannel, useWSMessage, useWSStatus } from '../hooks/useWebSocket';
 import StatCard from '../components/ui/StatCard';
 import { getServiceHealth, HEALTH_THRESHOLDS } from '../lib/health';
+import { getHealthStyle } from '../lib/theme';
 import toast from 'react-hot-toast';
 
 function formatCount(value: number | undefined) {
@@ -94,6 +95,13 @@ export default function Dashboard() {
   });
   const timeSeries = stats?.time_series ?? [];
 
+  const criticalServices = useMemo(() => {
+    return services.filter(svc => {
+      const { isUnhealthy } = getServiceHealth(svc.span_count, svc.error_count, svc.avg_latency_ms);
+      return isUnhealthy;
+    });
+  }, [services]);
+
   const statCards = useMemo(
     () => {
       const errorRate = stats?.error_rate ?? 0;
@@ -159,6 +167,37 @@ export default function Dashboard() {
 
       {viewState === 'ready' ? (
         <>
+          {criticalServices.length > 0 && (
+            <div className="bg-rose-500/10 border border-rose-500/30 rounded-xl p-6 shadow-sm">
+              <div className="flex items-center mb-4">
+                <AlertCircle className="text-rose-500 mr-2" size={24} />
+                <h2 className="text-lg font-bold text-rose-400 uppercase tracking-widest">주의 필요 서비스 ({criticalServices.length})</h2>
+              </div>
+              <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+                {criticalServices.map(svc => {
+                  const { errorRate } = getServiceHealth(svc.span_count, svc.error_count, svc.avg_latency_ms);
+                  return (
+                    <Link
+                      key={svc.name}
+                      to={`/services/${svc.name}`}
+                      className="bg-[#0f172a] hover:bg-slate-800 transition-colors border border-rose-500/20 rounded-lg p-4 flex flex-col justify-between"
+                    >
+                      <span className="font-bold text-slate-200 mb-2 truncate">{svc.name}</span>
+                      <div className="flex justify-between text-xs font-mono">
+                        <span className={errorRate > HEALTH_THRESHOLDS.ERROR_RATE ? 'text-rose-400 font-bold' : 'text-slate-400'}>
+                          Err: {(errorRate * 100).toFixed(1)}%
+                        </span>
+                        <span className={svc.avg_latency_ms > HEALTH_THRESHOLDS.AVG_LATENCY_MS ? 'text-rose-400 font-bold' : 'text-slate-400'}>
+                          Lat: {svc.avg_latency_ms.toFixed(0)}ms
+                        </span>
+                      </div>
+                    </Link>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {statCards.map((card) => (
               <StatCard
@@ -262,11 +301,31 @@ export default function Dashboard() {
                 <thead className="bg-slate-900/30">
                   <tr>
                     <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">서비스 이름</th>
-                    <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">초당 요청(RPS)</th>
-                    <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">에러율</th>
+                    <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8 group relative">
+                      초당 요청(RPS)
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-max max-w-xs bg-slate-800 text-xs text-slate-200 p-2 rounded shadow-lg z-10">
+                        현재 활성화된 시간 범위(기본 1시간) 동안의 총 Span 수를 시간(초)으로 나눈 값입니다.
+                      </div>
+                    </th>
+                    <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8 group relative">
+                      에러율
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-max max-w-xs bg-slate-800 text-xs text-slate-200 p-2 rounded shadow-lg z-10">
+                        총 Span 수 대비 에러가 발생한 Span의 비율입니다.
+                      </div>
+                    </th>
                     <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">평균 응답시간</th>
-                    <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">상위 5% (p95)</th>
-                    <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">상위 1% (p99)</th>
+                    <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8 group relative">
+                      상위 5% (p95)
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-max max-w-xs bg-slate-800 text-xs text-slate-200 p-2 rounded shadow-lg z-10">
+                        전체 요청 중 가장 느린 5%를 제외한 95번째 백분위수 응답 시간입니다.
+                      </div>
+                    </th>
+                    <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8 group relative">
+                      상위 1% (p99)
+                      <div className="absolute bottom-full left-1/2 -translate-x-1/2 mb-2 hidden group-hover:block w-max max-w-xs bg-slate-800 text-xs text-slate-200 p-2 rounded shadow-lg z-10">
+                        전체 요청 중 가장 느린 1%를 제외한 99번째 백분위수 응답 시간입니다.
+                      </div>
+                    </th>
                     <th className="px-4 py-4 text-left text-xs font-bold text-slate-400 uppercase tracking-widest md:px-6 lg:px-8">상태</th>
                   </tr>
                 </thead>
@@ -279,12 +338,13 @@ export default function Dashboard() {
                     </tr>
                   ) : services.map((svc) => {
                     const { errorRate, isUnhealthy } = getServiceHealth(svc.span_count, svc.error_count, svc.avg_latency_ms);
+                    const healthStyle = getHealthStyle(isUnhealthy);
 
                     return (
                       <tr key={svc.name} className="hover:bg-slate-800/20 transition-colors">
                         <td className="whitespace-nowrap px-4 py-4 md:px-6 lg:px-8">
                           <div className="flex items-center">
-                            <div className={`w-2 h-2 rounded-full mr-3 ${isUnhealthy ? 'bg-rose-500 animate-pulse' : 'bg-emerald-500'}`}></div>
+                            <div className={`w-2 h-2 rounded-full mr-3 ${healthStyle.pulse}`}></div>
                             <Link to={`/services/${svc.name}`} className="text-sm font-bold text-slate-200 hover:text-blue-400 transition-colors">
                               {svc.name}
                             </Link>
@@ -298,7 +358,7 @@ export default function Dashboard() {
                         <td className={`whitespace-nowrap px-4 py-4 font-mono text-sm md:px-6 lg:px-8 ${errorRate > HEALTH_THRESHOLDS.ERROR_RATE ? 'text-rose-400 font-bold' : 'text-slate-400'}`}>
                           {(errorRate * 100).toFixed(2)}%
                         </td>
-                        <td className="whitespace-nowrap px-4 py-4 font-mono text-sm text-slate-400 md:px-6 lg:px-8">
+                        <td className={`whitespace-nowrap px-4 py-4 font-mono text-sm md:px-6 lg:px-8 ${svc.avg_latency_ms > HEALTH_THRESHOLDS.AVG_LATENCY_MS ? 'text-rose-400 font-bold' : 'text-slate-400'}`}>
                           {svc.avg_latency_ms.toFixed(2)}ms
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 font-mono text-sm text-slate-400 md:px-6 lg:px-8">
@@ -308,15 +368,10 @@ export default function Dashboard() {
                           {svc.p99_latency_ms.toFixed(2)}ms
                         </td>
                         <td className="whitespace-nowrap px-4 py-4 md:px-6 lg:px-8">
-                          {isUnhealthy ? (
-                            <div className="flex items-center text-rose-400 text-xs font-bold uppercase tracking-tighter">
-                              <AlertCircle size={14} className="mr-1" /> 위급
-                            </div>
-                          ) : (
-                            <div className="flex items-center text-emerald-400 text-xs font-bold uppercase tracking-tighter">
-                              정상
-                            </div>
-                          )}
+                          <div className={`flex items-center text-xs font-bold uppercase tracking-tighter px-2 py-1 rounded w-max border ${healthStyle.text} ${healthStyle.bg} ${healthStyle.border}`}>
+                            {isUnhealthy && <AlertCircle size={14} className="mr-1" />}
+                            {isUnhealthy ? '위급' : '정상'}
+                          </div>
                         </td>
                       </tr>
                     );

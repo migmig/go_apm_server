@@ -9,6 +9,7 @@ import TraceList from '../components/traces/TraceList';
 import LogItem from '../components/logs/LogItem';
 import StatCard from '../components/ui/StatCard';
 import { getServiceHealth } from '../lib/health';
+import { getHealthStyle } from '../lib/theme';
 
 export default function ServiceDetail() {
   const { serviceName } = useParams();
@@ -81,6 +82,7 @@ export default function ServiceDetail() {
   }
 
   const { errorRate, isUnhealthy } = getServiceHealth(service.span_count, service.error_count, service.avg_latency_ms);
+  const healthStyle = getHealthStyle(isUnhealthy);
 
   const statCards = [
     { label: 'Span 수', value: new Intl.NumberFormat('ko-KR').format(service.span_count), icon: Layers, colorClass: 'text-blue-400', bgClass: 'bg-blue-500/10' },
@@ -100,15 +102,9 @@ export default function ServiceDetail() {
           <div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:space-x-3">
               <h1 className="text-lg font-bold text-slate-100 font-mono">{serviceName}</h1>
-              {isUnhealthy ? (
-                <span className="w-fit px-2 py-0.5 bg-rose-500/10 text-rose-400 text-xs font-bold rounded border border-rose-500/20 uppercase tracking-widest">
-                  위급
-                </span>
-              ) : (
-                <span className="w-fit px-2 py-0.5 bg-emerald-500/10 text-emerald-400 text-xs font-bold rounded border border-emerald-500/20 uppercase tracking-widest">
-                  정상
-                </span>
-              )}
+              <span className={`w-fit px-2 py-0.5 text-xs font-bold rounded border uppercase tracking-widest ${healthStyle.text} ${healthStyle.bg} ${healthStyle.border}`}>
+                {isUnhealthy ? '위급' : '정상'}
+              </span>
             </div>
             <div className="mt-2 flex flex-col gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 sm:flex-row sm:items-center sm:space-x-4">
               <span className="flex items-center"><Layers size={12} className="mr-1.5 text-blue-500" /> {service.span_count}개의 Span</span>

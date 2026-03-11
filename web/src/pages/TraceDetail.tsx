@@ -132,9 +132,9 @@ export default function TraceDetail() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
         {/* Waterfall Chart */}
         <div className="flex flex-col overflow-x-auto rounded-xl border border-slate-800 bg-[#0f172a] shadow-sm xl:col-span-3 xl:max-h-[72vh]">
-          <div className="flex flex-col xl:flex-1 h-full">
+          <div className="flex flex-col xl:flex-1 h-full min-w-[800px]">
             <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex text-xs font-bold text-slate-400 uppercase tracking-widest">
-              <div className="w-64 shrink-0 border-r border-slate-800 px-2">서비스 및 작업명</div>
+              <div className="w-1/3 min-w-[250px] max-w-[400px] shrink-0 border-r border-slate-800 px-2 sticky left-0 z-20 bg-[#0f172a]">서비스 및 작업명</div>
               <div className="flex-1 px-4 flex justify-between">
                 <span>진행 시간표 (Timeline)</span>
                 <span>{(traceStats.totalDuration / 1e6).toFixed(2)} ms</span>
@@ -147,17 +147,19 @@ export default function TraceDetail() {
                 const width = traceStats.totalDuration > 0 ? Math.max(((span.duration_ms * 1e6) / traceStats.totalDuration) * 100, 0.2) : 0.2;
                 const isSelected = selectedSpan?.span_id === span.span_id;
                 const hasError = span.status_code === 2;
+                const isHeavy = width > 30;
 
                 return (
                   <div
                     key={span.span_id}
                     ref={isSelected ? selectedRowRef : undefined}
                     onClick={() => handleSelectSpan(span)}
-                    className={`flex group cursor-pointer transition-all ${isSelected ? 'bg-blue-600/20 ring-1 ring-inset ring-blue-500/50' : 'hover:bg-slate-800/30'}`}
+                    className={`flex group cursor-pointer transition-all ${isSelected ? 'bg-blue-600/20 ring-1 ring-inset ring-blue-500/50' : 'hover:bg-slate-800/30'} ${isHeavy && !isSelected ? 'bg-amber-500/5' : ''}`}
                   >
                     {/* Operation Info */}
-                    <div className="w-64 shrink-0 p-3 border-r border-slate-800/50 flex flex-col justify-center min-w-0 relative">
+                    <div className={`w-1/3 min-w-[250px] max-w-[400px] shrink-0 p-3 border-r border-slate-800/50 flex flex-col justify-center min-w-0 relative sticky left-0 z-10 transition-colors ${isSelected ? 'bg-[#172643]' : isHeavy ? 'bg-[#151a23]' : 'bg-[#0f172a]'} group-hover:bg-[#1a2333]`}>
                       {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>}
+                      {isHeavy && !isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-amber-500/50"></div>}
                       <div
                         className="truncate"
                         style={{ paddingLeft: `${span.depth * 16}px` }}
@@ -169,9 +171,10 @@ export default function TraceDetail() {
                           <span className={`text-[10px] font-black uppercase px-1 rounded mr-2 ${getServiceColor(span.service_name)} text-white`}>
                             {span.service_name}
                           </span>
-                          {hasError && <AlertCircle size={12} className="text-rose-500 shrink-0" />}
+                          {hasError && <AlertCircle size={12} className="text-rose-500 shrink-0 mr-1" />}
+                          {isHeavy && <span className="text-[10px] font-bold text-amber-500 bg-amber-500/10 px-1 rounded ml-1 border border-amber-500/20">HEAVY</span>}
                         </div>
-                        <div className={`text-xs font-medium truncate ${isSelected ? 'text-blue-400' : 'text-slate-300'}`}>
+                        <div className={`text-xs font-medium truncate ${isSelected ? 'text-blue-400' : isHeavy ? 'text-amber-200' : 'text-slate-300'}`}>
                           {span.span_name}
                         </div>
                       </div>
@@ -186,7 +189,7 @@ export default function TraceDetail() {
                       </div>
 
                       <div
-                        className={`h-5 rounded-sm relative flex items-center transition-all duration-500 group-hover:brightness-110 ${getServiceColor(span.service_name)} ${hasError ? 'ring-2 ring-rose-500 ring-offset-2 ring-offset-[#0f172a]' : 'shadow-lg shadow-black/20'}`}
+                        className={`h-5 rounded-sm relative flex items-center transition-all duration-500 group-hover:brightness-110 ${getServiceColor(span.service_name)} ${hasError ? 'ring-2 ring-rose-500 ring-offset-2 ring-offset-[#0f172a]' : isHeavy ? 'ring-1 ring-amber-400 ring-offset-1 ring-offset-[#0f172a]' : 'shadow-lg shadow-black/20'}`}
                         style={{
                           left: `${left}%`,
                           width: `${width}%`,
@@ -216,9 +219,17 @@ export default function TraceDetail() {
           {selectedSpan ? (
             <div className="flex-1 space-y-6 overflow-y-auto p-5">
               <section>
-                <h3 className="text-xs font-bold text-slate-400 uppercase mb-3 tracking-widest flex items-center">
-                  <Server size={12} className="mr-2" /> 컨텍스트
-                </h3>
+                <div className="flex justify-between items-center mb-3">
+                  <h3 className="text-xs font-bold text-slate-400 uppercase tracking-widest flex items-center">
+                    <Server size={12} className="mr-2" /> 컨텍스트
+                  </h3>
+                  <Link 
+                    to={`/logs?trace_id=${selectedSpan.trace_id}&span_id=${selectedSpan.span_id}`}
+                    className="text-[10px] text-blue-400 hover:text-blue-300 font-bold border border-blue-500/30 px-2 py-1 rounded bg-blue-500/10 transition-colors flex items-center"
+                  >
+                    로그 보기
+                  </Link>
+                </div>
                 <div className="space-y-3">
                   <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
                     <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">서비스</p>
