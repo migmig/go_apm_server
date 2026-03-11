@@ -1,14 +1,16 @@
 import { useEffect, useState } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { ChevronRight } from 'lucide-react';
+import { ChevronRight, Pause, Play } from 'lucide-react';
 import SidebarNavigation from './SidebarNavigation';
 import { getPageMeta } from '../lib/navigation';
 import { Toaster } from 'react-hot-toast';
+import { useWSPause } from '../hooks/useWebSocket';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
   const [mobileOpen, setMobileOpen] = useState(false);
   const pageMeta = getPageMeta(location.pathname);
+  const { isPaused, setPaused } = useWSPause();
 
   useEffect(() => {
     setMobileOpen(false);
@@ -89,8 +91,21 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                     <p className="mt-1 max-w-3xl text-sm text-slate-400">{pageMeta.description}</p>
                   </div>
 
-                  <div className="shrink-0 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-medium text-slate-400">
-                    v0.1.0-alpha
+                  <div className="flex items-center gap-3">
+                    <button
+                      onClick={() => setPaused(!isPaused)}
+                      className={`inline-flex items-center gap-1.5 shrink-0 rounded-full border px-3 py-1.5 text-xs font-semibold transition-all shadow-sm ${
+                        isPaused 
+                          ? 'bg-amber-500/10 border-amber-500/30 text-amber-500 hover:bg-amber-500/20 shadow-amber-500/10' 
+                          : 'bg-emerald-500/10 border-emerald-500/30 text-emerald-500 hover:bg-emerald-500/20 shadow-emerald-500/10'
+                      }`}
+                    >
+                      {isPaused ? <Play size={14} className="fill-current" /> : <Pause size={14} className="fill-current" />}
+                      {isPaused ? '수신 재개' : '수신 동결'}
+                    </button>
+                    <div className="hidden sm:block shrink-0 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-medium text-slate-400">
+                      v0.1.0-alpha
+                    </div>
                   </div>
                 </div>
               </div>

@@ -1,10 +1,11 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ArrowRight, ChevronDown, ChevronUp, Clock, Layers, Server } from 'lucide-react';
 import type { TraceSummary } from '../../api/client';
 import { cn } from '../../lib/cn';
 import { getTraceStatusStyle } from '../../lib/theme';
+import CopyButton from '../ui/CopyButton';
 
 function TraceStatusBadge({ statusCode }: { statusCode: number }) {
   const style = getTraceStatusStyle(statusCode);
@@ -83,7 +84,10 @@ function TraceMobileCard({ trace }: { trace: TraceSummary }) {
         <div className="mt-4 space-y-3 rounded-xl border border-slate-800 bg-[#0f172a] p-4">
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Trace ID</p>
-            <p className="mt-1 break-all font-mono text-xs text-slate-300">{trace.trace_id}</p>
+            <div className="mt-1 flex items-center gap-2">
+              <p className="break-all font-mono text-xs text-slate-300">{trace.trace_id}</p>
+              <CopyButton value={trace.trace_id} className="shrink-0" />
+            </div>
           </div>
           <div>
             <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">부가 정보</p>
@@ -115,18 +119,45 @@ function TraceMobileCard({ trace }: { trace: TraceSummary }) {
   );
 }
 
-function TraceTable({ traces }: { traces: TraceSummary[] }) {
+type SortField = 'start_time' | 'duration_ms' | 'status_code';
+type SortOrder = 'asc' | 'desc';
+
+interface TraceTableProps {
+  traces: TraceSummary[];
+  sortField: SortField;
+  sortOrder: SortOrder;
+  onSort: (field: SortField) => void;
+}
+
+function TraceTable({ traces, sortField, sortOrder, onSort }: TraceTableProps) {
+  const getSortIcon = (field: SortField) => {
+    if (sortField !== field) return <span className="ml-1 inline-block w-3" />;
+    return sortOrder === 'asc' ? <ChevronUp size={12} className="ml-1 inline-block" /> : <ChevronDown size={12} className="ml-1 inline-block" />;
+  };
+
+  const SortableHeader = ({ field, label }: { field: SortField; label: string }) => (
+    <th
+      className="cursor-pointer px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors select-none"
+      onClick={() => onSort(field)}
+    >
+      <div className="flex items-center">
+        {label}
+        {getSortIcon(field)}
+      </div>
+    </th>
+  );
+
   return (
     <div className="hidden overflow-x-auto md:block">
       <table className="min-w-full divide-y divide-slate-800">
         <thead className="bg-slate-900/50">
           <tr>
-            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">요청 시간</th>
+            <SortableHeader field="start_time" label="요청 시간" />
             <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">요청 ID</th>
             <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">시작 서비스</th>
             <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">수행 작업</th>
-            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">소요 시간</th>
-            <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">결과</th>
+            <SortableHeader field="duration_ms" label="소요 시간" />
+            <SortableHeader field="status_code" label="결과" />
             <th className="px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500">부가 정보</th>
             <th className="px-6 py-4 text-right text-[10px] font-bold uppercase tracking-widest text-slate-500">관리</th>
           </tr>
@@ -138,12 +169,15 @@ function TraceTable({ traces }: { traces: TraceSummary[] }) {
                 {format(trace.start_time / 1e6, 'yyyy-MM-dd HH:mm:ss')}
               </td>
               <td className="whitespace-nowrap px-6 py-4">
-                <Link
-                  to={`/traces/${trace.trace_id}`}
-                  className="text-xs font-mono text-blue-400 transition-colors hover:text-blue-300 hover:underline"
-                >
-                  {trace.trace_id.substring(0, 8)}...
-                </Link>
+                <div className="flex items-center gap-2">
+                  <Link
+                    to={`/traces/${trace.trace_id}`}
+                    className="text-xs font-mono text-blue-400 transition-colors hover:text-blue-300 hover:underline"
+                  >
+                    {trace.trace_id.substring(0, 8)}...
+                  </Link>
+                  <CopyButton value={trace.trace_id} iconSize={12} className="opacity-0 group-hover:opacity-100 transition-opacity p-1" />
+                </div>
               </td>
               <td className="whitespace-nowrap px-6 py-4">
                 <div className="flex items-center">
@@ -184,11 +218,59 @@ function TraceTable({ traces }: { traces: TraceSummary[] }) {
 }
 
 export default function TraceList({ traces }: { traces: TraceSummary[] }) {
+  const [sortField, setSortField] = useState<SortField>('start_time');
+  const [sortOrder, setSortOrder] = useState<SortOrder>('desc');
+
+  const handleSort = (field: SortField) => {
+    if (sortField === field) {
+      setSortOrder(sortOrder === 'desc' ? 'asc' : 'desc');
+    } else {
+      setSortField(field);
+      setSortOrder('desc'); // default to desc for new sorted field
+    }
+  };
+
+  const sortedTraces = useMemo(() => {
+    return [...traces].sort((a, b) => {
+      let comparison = 0;
+      if (sortField === 'start_time') {
+        comparison = a.start_time - b.start_time;
+      } else if (sortField === 'duration_ms') {
+        comparison = a.duration_ms - b.duration_ms;
+      } else if (sortField === 'status_code') {
+        // ERROR(2) > UNSET(0) > OK(1)
+        const order = { 2: 3, 0: 2, 1: 1 };
+        comparison = (order[a.status_code as keyof typeof order] || 0) - (order[b.status_code as keyof typeof order] || 0);
+      }
+
+      return sortOrder === 'asc' ? comparison : -comparison;
+    });
+  }, [traces, sortField, sortOrder]);
+
   return (
     <>
-      <TraceTable traces={traces} />
+      <TraceTable traces={sortedTraces} sortField={sortField} sortOrder={sortOrder} onSort={handleSort} />
       <div className="space-y-4 p-4 md:hidden">
-        {traces.map((trace) => (
+        {/* 모바일에서도 일단 정렬 버튼 추가 필요 시 기능 추가 가능. 현재는 목록만 정렬 됨 */}
+        <div className="flex items-center justify-end mb-2 text-xs text-slate-400">
+          <span className="mr-2">정렬 기준:</span>
+          <select 
+            className="bg-slate-900 border border-slate-700 rounded px-2 py-1 text-slate-200"
+            value={`${sortField}|${sortOrder}`}
+            onChange={(e) => {
+              const [valField, valOrder] = e.target.value.split('|');
+              setSortField(valField as SortField);
+              setSortOrder(valOrder as SortOrder);
+            }}
+          >
+            <option value="start_time|desc">요청 시간 (최신순)</option>
+            <option value="start_time|asc">요청 시간 (오래된순)</option>
+            <option value="duration_ms|desc">소요 시간 (오래 걸린순)</option>
+            <option value="duration_ms|asc">소요 시간 (짧게 걸린순)</option>
+            <option value="status_code|desc">결과 (에러 우선)</option>
+          </select>
+        </div>
+        {sortedTraces.map((trace) => (
           <TraceMobileCard key={trace.trace_id} trace={trace} />
         ))}
       </div>

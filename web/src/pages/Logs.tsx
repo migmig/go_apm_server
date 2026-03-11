@@ -10,6 +10,8 @@ import { getLogSeverityStyle } from '../lib/theme';
 import { Virtuoso } from 'react-virtuoso';
 import toast from 'react-hot-toast';
 import LogAttributes from '../components/ui/LogAttributes';
+import HighlightText from '../components/ui/HighlightText';
+import CopyButton from '../components/ui/CopyButton';
 
 interface LogRecord {
   timestamp: string;
@@ -238,15 +240,18 @@ export default function Logs() {
                   </div>
 
                   <span className="text-slate-300 break-all leading-relaxed flex-1 mt-1 sm:mt-0">
-                    {log.body}
+                    <HighlightText text={log.body} highlight={searchBody} />
                   </span>
                   {log.trace_id && (
-                    <Link
-                      to={`/traces/${log.trace_id}`}
-                      className="shrink-0 text-xs text-slate-500 hover:text-blue-400 transition-colors border border-slate-800 rounded px-1 group-hover:border-slate-700"
-                    >
-                      요청:{log.trace_id.substring(0, 6)}
-                    </Link>
+                    <div className="flex items-center gap-1.5 shrink-0 mt-1 sm:mt-0">
+                      <Link
+                        to={`/traces/${log.trace_id}`}
+                        className="text-xs text-slate-500 hover:text-blue-400 transition-colors border border-slate-800 rounded px-1 group-hover:border-slate-700"
+                      >
+                        요청:{log.trace_id.substring(0, 6)}
+                      </Link>
+                      <CopyButton value={log.trace_id} iconSize={12} className="p-0.5 rounded text-slate-500 hover:text-slate-300 opacity-0 group-hover:opacity-100 transition-opacity" />
+                    </div>
                   )}
                 </div>
                 {log.attributes && Object.keys(log.attributes).length > 0 && (

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import CopyButton from './CopyButton';
 
 const DEFAULT_VISIBLE_COUNT = 3;
 
@@ -24,10 +25,11 @@ export default function LogAttributes({ attributes }: LogAttributesProps) {
             {visibleEntries.map(([key, value]) => (
                 <span
                     key={key}
-                    className="inline-flex max-w-full items-center rounded-md border border-slate-700/60 bg-slate-900/70 px-2 py-1 text-[11px] text-slate-400"
+                    className="group inline-flex max-w-full items-center rounded-md border border-slate-700/60 bg-slate-900/70 py-1 pl-2 pr-1 text-[11px] text-slate-400"
                 >
                     <span className="mr-1 text-blue-300/70">{key}:</span>
-                    <span className="truncate">{String(value)}</span>
+                    <span className="truncate max-w-[200px] sm:max-w-none mr-1">{String(value)}</span>
+                    <CopyButton value={String(value)} iconSize={10} className="p-0.5 opacity-0 group-hover:opacity-100 transition-opacity" />
                 </span>
             ))}
             {hiddenCount > 0 && (

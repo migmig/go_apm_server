@@ -1,10 +1,10 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import client from '../api/client';
-import { format } from 'date-fns';
 import { ChevronLeft, Clock, Server, Layers, Info, AlertCircle } from 'lucide-react';
 import { getServiceColor } from '../lib/theme';
 import LogAttributes from '../components/ui/LogAttributes';
+import CopyButton from '../components/ui/CopyButton';
 
 interface Span {
   trace_id: string;
@@ -115,7 +115,10 @@ export default function TraceDetail() {
           </Link>
           <div>
             <div className="flex flex-col gap-2 sm:flex-row sm:items-center sm:space-x-3">
-              <h1 className="text-lg font-bold text-slate-100 font-mono">{traceId}</h1>
+              <div className="flex items-center gap-2">
+                <h1 className="text-lg font-bold text-slate-100 font-mono">{traceId}</h1>
+                {traceId && <CopyButton value={traceId} />}
+              </div>
               <span className="px-2 py-0.5 bg-blue-500/10 text-blue-400 text-xs font-bold rounded border border-blue-500/20 uppercase tracking-widest">요청 상세</span>
             </div>
             <div className="mt-2 flex flex-col gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 sm:flex-row sm:items-center sm:space-x-4">
