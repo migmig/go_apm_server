@@ -14,15 +14,16 @@ function App() {
   return (
     <AppLayout>
       <Suspense fallback={<div className="flex items-center justify-center h-64"><div className="text-gray-400">Loading...</div></div>}>
-      <Routes>
-        <Route path="/" element={<Dashboard />} />
-        <Route path="/services/:serviceName" element={<ServiceDetail />} />
-        <Route path="/traces" element={<Traces />} />
-        <Route path="/traces/:traceId" element={<TraceDetail />} />
-        <Route path="/logs" element={<Logs />} />
-        <Route path="/settings" element={<SettingsPage />} />
-        <Route path="*" element={<NotFoundPage />} />
-      </Routes>
+        <Routes>
+          <Route path="/" element={<Dashboard />} />
+          <Route path="/services/:serviceName" element={<ServiceDetail />} />
+          <Route path="/traces" element={<Traces />} />
+          <Route path="/traces/:traceId" element={<TraceDetail />} />
+          <Route path="/logs" element={<Logs />} />
+          <Route path="/settings" element={<SettingsPage />} />
+          <Route path="*" element={<NotFoundPage />} />
+        </Routes>
+      </Suspense>
     </AppLayout>
   );
 }
