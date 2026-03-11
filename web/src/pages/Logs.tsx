@@ -1,6 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import client from '../api/client';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Search, Terminal, RefreshCcw, Filter, Play, Pause } from 'lucide-react';
 import { PageEmptyState, PageErrorState, PageLoadingState } from '../components/PageState';
@@ -24,11 +24,13 @@ interface LogRecord {
 }
 
 export default function Logs() {
+  const [searchParams] = useSearchParams();
   const [logs, setLogs] = useState<LogRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
-  const [serviceName, setServiceName] = useState('');
+  const [serviceName, setServiceName] = useState(searchParams.get('service') || '');
   const [searchBody, setSearchBody] = useState('');
+  const [traceIdFilter, setTraceIdFilter] = useState(searchParams.get('trace_id') || '');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const [streaming, setStreaming] = useState(false);
@@ -73,6 +75,7 @@ export default function Logs() {
         params: {
           service: serviceName,
           search: searchBody,
+          trace_id: traceIdFilter,
         },
       });
       setLogs(res.data.logs || []);
@@ -163,7 +166,7 @@ export default function Logs() {
             onChange={(e) => setServiceName(e.target.value)}
           />
         </div>
-        <div className="flex items-center space-x-3 md:col-span-2 bg-slate-900/50 rounded-lg px-3 border border-slate-800 focus-within:border-blue-500/50 transition-colors">
+        <div className="flex items-center space-x-3 bg-slate-900/50 rounded-lg px-3 border border-slate-800 focus-within:border-blue-500/50 transition-colors">
           <Search size={16} className="text-slate-500" />
           <input
             type="text"
@@ -171,6 +174,16 @@ export default function Logs() {
             className="w-full bg-transparent border-none focus:ring-0 text-sm py-2 text-slate-200 placeholder-slate-600"
             value={searchBody}
             onChange={(e) => setSearchBody(e.target.value)}
+          />
+        </div>
+        <div className="flex items-center space-x-3 bg-slate-900/50 rounded-lg px-3 border border-slate-800 focus-within:border-blue-500/50 transition-colors">
+          <Terminal size={16} className="text-slate-500" />
+          <input
+            type="text"
+            placeholder="Trace ID 필터..."
+            className="w-full bg-transparent border-none focus:ring-0 text-sm py-2 text-slate-200 placeholder-slate-600"
+            value={traceIdFilter}
+            onChange={(e) => setTraceIdFilter(e.target.value)}
           />
         </div>
         <button

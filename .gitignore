@@ -1,5 +1,10 @@
 apm-server
+go-apm-server
+server.log
 data/
 *.db
 *.db-shm
 *.db-wal
+**/node_modules/
+**/dist/
+.DS_Store

@@ -116,6 +116,13 @@ export default function Dashboard() {
     [stats],
   );
 
+  const unhealthyServices = useMemo(() => {
+    return services.filter(svc => {
+      const { isUnhealthy } = getServiceHealth(svc.span_count, svc.error_count, svc.avg_latency_ms);
+      return isUnhealthy;
+    });
+  }, [services]);
+
   return (
     <div className="space-y-8">
       <div className="flex flex-col gap-4 sm:flex-row sm:items-end sm:justify-between">
@@ -159,6 +166,27 @@ export default function Dashboard() {
 
       {viewState === 'ready' ? (
         <>
+          {unhealthyServices.length > 0 && (
+            <div className="bg-rose-500/10 border border-rose-500/20 rounded-xl p-4 mb-8">
+              <div className="flex items-center gap-2 mb-3">
+                <AlertCircle className="text-rose-500" size={20} />
+                <h2 className="text-sm font-bold text-rose-400 uppercase tracking-widest">주의가 필요한 서비스 ({unhealthyServices.length})</h2>
+              </div>
+              <div className="flex flex-wrap gap-3">
+                {unhealthyServices.map(svc => (
+                  <Link
+                    key={svc.name}
+                    to={`/services/${svc.name}`}
+                    className="bg-rose-500 text-white px-3 py-1.5 rounded-lg text-xs font-bold flex items-center gap-2 hover:bg-rose-600 transition-colors shadow-lg shadow-rose-500/20"
+                  >
+                    {svc.name}
+                    <Zap size={12} className="animate-pulse" />
+                  </Link>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
             {statCards.map((card) => (
               <StatCard

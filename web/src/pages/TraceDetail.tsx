@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import client from '../api/client';
-import { ChevronLeft, Clock, Server, Layers, Info, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Clock, Server, Layers, Info, AlertCircle, ExternalLink, Zap } from 'lucide-react';
 import { getServiceColor } from '../lib/theme';
 import LogAttributes from '../components/ui/LogAttributes';
 import CopyButton from '../components/ui/CopyButton';
@@ -147,6 +147,7 @@ export default function TraceDetail() {
                 const width = traceStats.totalDuration > 0 ? Math.max(((span.duration_ms * 1e6) / traceStats.totalDuration) * 100, 0.2) : 0.2;
                 const isSelected = selectedSpan?.span_id === span.span_id;
                 const hasError = span.status_code === 2;
+                const isHeavy = (span.duration_ms * 1e6) / traceStats.totalDuration > 0.3;
 
                 return (
                   <div
@@ -186,7 +187,7 @@ export default function TraceDetail() {
                       </div>
 
                       <div
-                        className={`h-5 rounded-sm relative flex items-center transition-all duration-500 group-hover:brightness-110 ${getServiceColor(span.service_name)} ${hasError ? 'ring-2 ring-rose-500 ring-offset-2 ring-offset-[#0f172a]' : 'shadow-lg shadow-black/20'}`}
+                        className={`h-5 rounded-sm relative flex items-center transition-all duration-500 group-hover:brightness-110 ${getServiceColor(span.service_name)} ${hasError ? 'ring-2 ring-rose-500 ring-offset-2 ring-offset-[#0f172a]' : 'shadow-lg shadow-black/20'} ${isHeavy ? 'ring-2 ring-amber-400 ring-offset-2 ring-offset-[#0f172a]' : ''}`}
                         style={{
                           left: `${left}%`,
                           width: `${width}%`,
@@ -194,9 +195,10 @@ export default function TraceDetail() {
                         }}
                       >
                         {/* Duration label inside or outside based on width */}
-                        <span className={`absolute whitespace-nowrap text-[10px] font-bold font-mono ${width > 15 ? 'left-2 text-white' : 'left-full ml-3 text-slate-400'}`}>
+                        <div className={`absolute whitespace-nowrap flex items-center gap-1 text-[10px] font-bold font-mono ${width > 15 ? 'left-2 text-white' : 'left-full ml-3 text-slate-400'}`}>
+                          {isHeavy && <Zap size={10} className="text-amber-300 animate-pulse" />}
                           {span.duration_ms.toFixed(2)} ms
-                        </span>
+                        </div>
                       </div>
                     </div>
                   </div>
@@ -228,6 +230,15 @@ export default function TraceDetail() {
                     <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">수행 작업</p>
                     <p className="text-sm font-bold text-blue-400 font-mono">{selectedSpan.span_name}</p>
                   </div>
+                </div>
+                <div className="mt-4">
+                  <Link
+                    to={`/logs?service=${encodeURIComponent(selectedSpan.service_name)}&trace_id=${selectedSpan.trace_id}`}
+                    className="flex items-center justify-center w-full gap-2 px-4 py-2.5 bg-blue-600 hover:bg-blue-500 text-white text-xs font-bold rounded-lg transition-all shadow-lg shadow-blue-600/20"
+                  >
+                    <ExternalLink size={14} />
+                    이 스팬의 로그 즉시 확인
+                  </Link>
                 </div>
               </section>
 
