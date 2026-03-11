@@ -4,20 +4,19 @@ import { format } from 'date-fns';
 import { ArrowRight, ChevronDown, ChevronUp, Clock, Layers, Server } from 'lucide-react';
 import type { TraceSummary } from '../../api/client';
 import { cn } from '../../lib/cn';
+import { getTraceStatusStyle } from '../../lib/theme';
 
 function TraceStatusBadge({ statusCode }: { statusCode: number }) {
-  const failed = statusCode === 2;
+  const style = getTraceStatusStyle(statusCode);
 
   return (
     <span
       className={cn(
         'inline-flex items-center rounded-full border px-2.5 py-1 text-[10px] font-bold uppercase tracking-[0.22em]',
-        failed
-          ? 'border-rose-500/30 bg-rose-500/10 text-rose-300'
-          : 'border-emerald-500/30 bg-emerald-500/10 text-emerald-300',
+        style.text,
       )}
     >
-      {failed ? '실패' : '성공'}
+      {style.label}
     </span>
   );
 }

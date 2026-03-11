@@ -3,10 +3,11 @@ import client, { type TraceSummary } from '../api/client';
 import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { Search, RefreshCw, Loader2, CalendarDays, X } from 'lucide-react';
-import { PageEmptyState, PageErrorState, PageLoadingState, StatusBanner } from '../components/PageState';
+import { PageEmptyState, PageErrorState, PageLoadingState } from '../components/PageState';
 import { getAsyncViewState, getErrorMessage } from '../lib/request-state';
 import { useWSChannel, useWSMessage } from '../hooks/useWebSocket';
 import TraceList from '../components/traces/TraceList';
+import toast from 'react-hot-toast';
 
 const PAGE_SIZE = 50;
 
@@ -19,7 +20,6 @@ export default function Traces() {
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
-  const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const observer = useRef<IntersectionObserver | null>(null);
 
@@ -45,7 +45,6 @@ export default function Traces() {
     setLoading(true);
     setOffset(0);
     setHasMore(true);
-    setLoadMoreError(null);
 
     try {
       const params: Record<string, any> = {
@@ -76,7 +75,6 @@ export default function Traces() {
     }
 
     setLoadingMore(true);
-    setLoadMoreError(null);
     const nextOffset = offset + PAGE_SIZE;
 
     try {
@@ -102,7 +100,7 @@ export default function Traces() {
       }
     } catch (err) {
       console.error('Failed to load more traces', err);
-      setLoadMoreError(getErrorMessage(err, '추가 요청 데이터를 불러오지 못했습니다.'));
+      toast.error(getErrorMessage(err, '추가 요청 데이터를 불러오지 못했습니다.'), { id: 'traces-loadmore' });
     } finally {
       setLoadingMore(false);
     }
@@ -111,13 +109,13 @@ export default function Traces() {
   const lastElementRef = useCallback((node: HTMLDivElement | null) => {
     if (loading || loadingMore) return;
     if (observer.current) observer.current.disconnect();
-    
+
     observer.current = new IntersectionObserver(entries => {
       if (entries[0].isIntersecting && hasMore) {
         loadMore();
       }
     });
-    
+
     if (node) observer.current.observe(node);
   }, [hasMore, loadMore, loading, loadingMore]);
 
@@ -150,7 +148,7 @@ export default function Traces() {
         </div>
       </div>
 
-      <div className="flex flex-col md:flex-row md:items-center gap-4 bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-sm">
+      <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="flex flex-col md:flex-row md:items-center gap-4 bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-sm">
         <div className="flex items-center space-x-3 flex-1 bg-slate-900/50 rounded-lg px-3 border border-slate-800 focus-within:border-blue-500/50 transition-colors">
           <Search size={18} className="text-slate-500" />
           <input
@@ -159,12 +157,11 @@ export default function Traces() {
             className="w-full bg-transparent border-none focus:ring-0 text-sm py-2.5 text-slate-200 placeholder-slate-600"
             value={serviceName}
             onChange={(e) => setServiceName(e.target.value)}
-            onKeyDown={(e) => e.key === 'Enter' && handleSearch()}
           />
         </div>
         <div className="h-10 w-px bg-slate-800 hidden md:block"></div>
         <button
-          onClick={handleSearch}
+          type="submit"
           disabled={loading}
           className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
         >
@@ -173,7 +170,7 @@ export default function Traces() {
             조회하기
           </span>
         </button>
-      </div>
+      </form>
 
       {dateLabel && (
         <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-2.5">
@@ -191,15 +188,7 @@ export default function Traces() {
         </div>
       )}
 
-      {errorMessage && traces.length > 0 ? (
-        <StatusBanner
-          tone="warning"
-          title="마지막으로 성공한 요청 목록을 유지하고 있습니다."
-          description={errorMessage}
-          actionLabel="다시 조회"
-          onAction={() => void fetchTraces()}
-        />
-      ) : null}
+
 
       <div className="bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm overflow-hidden">
         {viewState === 'loading' ? (
@@ -232,7 +221,7 @@ export default function Traces() {
         {viewState === 'ready' ? (
           <TraceList traces={traces} />
         ) : null}
-        
+
         {/* Infinite Scroll Trigger */}
         {viewState === 'ready' && hasMore && traces.length > 0 && (
           <div ref={lastElementRef} className="py-8 flex justify-center border-t border-slate-800 bg-slate-900/20">
@@ -242,22 +231,12 @@ export default function Traces() {
                 <span>데이터를 더 불러오는 중...</span>
               </div>
             ) : (
-              <div className="h-4" /> 
+              <div className="h-4" />
             )}
           </div>
         )}
-        
-        {viewState === 'ready' && loadMoreError ? (
-          <div className="border-t border-slate-800 bg-slate-900/20 p-4">
-            <StatusBanner
-              tone="error"
-              title="추가 데이터를 더 불러오지 못했습니다."
-              description={loadMoreError}
-              actionLabel="다시 시도"
-              onAction={() => void loadMore()}
-            />
-          </div>
-        ) : null}
+
+
 
         {viewState === 'ready' && !hasMore && traces.length > 0 && (
           <div className="py-6 text-center text-xs text-slate-400 bg-slate-900/20 border-t border-slate-800">

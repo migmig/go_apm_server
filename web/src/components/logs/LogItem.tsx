@@ -2,27 +2,16 @@ import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
 import type { LogRecord } from '../../api/client';
 import { cn } from '../../lib/cn';
-
-function getSeverityRowStyle(num: number) {
-  if (num >= 17) return 'border-l-rose-500 bg-rose-500/5';
-  if (num >= 13) return 'border-l-amber-500 bg-amber-500/5';
-  if (num >= 9) return 'border-l-blue-500 bg-blue-500/5';
-  return 'border-l-slate-700';
-}
-
-function getSeverityBadgeStyle(num: number) {
-  if (num >= 17) return 'border-rose-500/30 bg-rose-500/10 text-rose-300';
-  if (num >= 13) return 'border-amber-500/30 bg-amber-500/10 text-amber-300';
-  if (num >= 9) return 'border-blue-500/30 bg-blue-500/10 text-blue-300';
-  return 'border-slate-700 bg-slate-800 text-slate-400';
-}
+import { getLogSeverityStyle } from '../../lib/theme';
 
 export default function LogItem({ log }: { log: LogRecord }) {
+  const severity = getLogSeverityStyle(log.severity_number);
+
   return (
     <article
       className={cn(
         'rounded-xl border border-slate-800/80 border-l-2 px-4 py-3 transition-colors hover:bg-slate-800/30',
-        getSeverityRowStyle(log.severity_number),
+        severity.row,
       )}
     >
       <div className="flex flex-col gap-3">
@@ -32,7 +21,7 @@ export default function LogItem({ log }: { log: LogRecord }) {
             <span
               className={cn(
                 'inline-flex w-fit items-center rounded-full border px-2 py-1 text-[10px] font-bold uppercase tracking-[0.22em]',
-                getSeverityBadgeStyle(log.severity_number),
+                severity.badge,
               )}
             >
               {(log.severity_text || 'INFO').toUpperCase()}

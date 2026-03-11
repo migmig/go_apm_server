@@ -1,8 +1,10 @@
-import { useEffect, useState, useMemo } from 'react';
+import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import client from '../api/client';
 import { format } from 'date-fns';
 import { ChevronLeft, Clock, Server, Layers, Info, AlertCircle } from 'lucide-react';
+import { getServiceColor } from '../lib/theme';
+import LogAttributes from '../components/ui/LogAttributes';
 
 interface Span {
   trace_id: string;
@@ -22,25 +24,25 @@ interface SpanNode extends Span {
   depth: number;
 }
 
-// Helper to assign a color based on service name
-const getServiceColor = (name: string) => {
-  const colors = [
-    'bg-blue-500', 'bg-indigo-500', 'bg-purple-500', 
-    'bg-emerald-500', 'bg-cyan-500', 'bg-teal-500', 
-    'bg-orange-500', 'bg-pink-500', 'bg-violet-500'
-  ];
-  let hash = 0;
-  for (let i = 0; i < name.length; i++) {
-    hash = name.charCodeAt(i) + ((hash << 5) - hash);
-  }
-  return colors[Math.abs(hash) % colors.length];
-};
+
 
 export default function TraceDetail() {
   const { traceId } = useParams();
   const [spans, setSpans] = useState<Span[]>([]);
   const [loading, setLoading] = useState(true);
   const [selectedSpan, setSelectedSpan] = useState<Span | null>(null);
+  const selectedRowRef = useRef<HTMLDivElement | null>(null);
+
+  const handleSelectSpan = useCallback((span: Span) => {
+    setSelectedSpan(span);
+  }, []);
+
+  // Auto-scroll to selected span row
+  useEffect(() => {
+    if (selectedRowRef.current) {
+      selectedRowRef.current.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+    }
+  }, [selectedSpan]);
 
   useEffect(() => {
     async function fetchTrace() {
@@ -127,76 +129,77 @@ export default function TraceDetail() {
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
         {/* Waterfall Chart */}
         <div className="flex flex-col overflow-x-auto rounded-xl border border-slate-800 bg-[#0f172a] shadow-sm xl:col-span-3 xl:max-h-[72vh]">
-          <div className="min-w-[600px] flex flex-col xl:flex-1 h-full">
-          <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex text-xs font-bold text-slate-400 uppercase tracking-widest">
-            <div className="w-1/3 border-r border-slate-800 px-2">서비스 및 작업명</div>
-            <div className="w-2/3 px-4 flex justify-between">
-              <span>진행 시간표 (Timeline)</span>
-              <span>{(traceStats.totalDuration / 1e6).toFixed(2)} ms</span>
+          <div className="flex flex-col xl:flex-1 h-full">
+            <div className="p-3 bg-slate-900/50 border-b border-slate-800 flex text-xs font-bold text-slate-400 uppercase tracking-widest">
+              <div className="w-64 shrink-0 border-r border-slate-800 px-2">서비스 및 작업명</div>
+              <div className="flex-1 px-4 flex justify-between">
+                <span>진행 시간표 (Timeline)</span>
+                <span>{(traceStats.totalDuration / 1e6).toFixed(2)} ms</span>
+              </div>
             </div>
-          </div>
-          
-          <div className="divide-y divide-slate-800/30 overflow-y-auto scrollbar-hide xl:flex-1">
-            {flattenedNodes.map((span) => {
-              const left = traceStats.totalDuration > 0 ? ((span.start_time - traceStats.minStart) / traceStats.totalDuration) * 100 : 0;
-              const width = traceStats.totalDuration > 0 ? Math.max(((span.duration_ms * 1e6) / traceStats.totalDuration) * 100, 0.2) : 0.2;
-              const isSelected = selectedSpan?.span_id === span.span_id;
-              const hasError = span.status_code === 2;
-              
-              return (
-                <div 
-                  key={span.span_id} 
-                  onClick={() => setSelectedSpan(span)}
-                  className={`flex group cursor-pointer transition-all ${isSelected ? 'bg-blue-600/10 ring-1 ring-inset ring-blue-500/50' : 'hover:bg-slate-800/30'}`}
-                >
-                  {/* Operation Info */}
-                  <div className="w-1/3 p-3 border-r border-slate-800/50 flex flex-col justify-center min-w-0 relative">
-                    {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>}
-                    <div 
-                      className="truncate"
-                      style={{ paddingLeft: `${span.depth * 16}px` }}
-                    >
-                      <div className="flex items-center mb-0.5">
-                        {span.depth > 0 && (
-                          <div className="absolute left-0 w-px bg-slate-700/50 h-full" style={{ left: `${(span.depth * 16) - 8}px` }}></div>
-                        )}
-                        <span className={`text-[10px] font-black uppercase px-1 rounded mr-2 ${getServiceColor(span.service_name)} text-white`}>
-                          {span.service_name}
-                        </span>
-                        {hasError && <AlertCircle size={12} className="text-rose-500 shrink-0" />}
-                      </div>
-                      <div className={`text-xs font-medium truncate ${isSelected ? 'text-blue-400' : 'text-slate-300'}`}>
-                        {span.span_name}
-                      </div>
-                    </div>
-                  </div>
 
-                  {/* Timeline Bar */}
-                  <div className="w-2/3 p-3 relative flex items-center">
-                    <div className="absolute inset-0 flex justify-between px-4 pointer-events-none">
-                      {[0, 25, 50, 75, 100].map(p => (
-                        <div key={p} className="h-full w-px bg-slate-800/30"></div>
-                      ))}
+            <div className="divide-y divide-slate-800/30 overflow-y-auto scrollbar-hide xl:flex-1">
+              {flattenedNodes.map((span) => {
+                const left = traceStats.totalDuration > 0 ? ((span.start_time - traceStats.minStart) / traceStats.totalDuration) * 100 : 0;
+                const width = traceStats.totalDuration > 0 ? Math.max(((span.duration_ms * 1e6) / traceStats.totalDuration) * 100, 0.2) : 0.2;
+                const isSelected = selectedSpan?.span_id === span.span_id;
+                const hasError = span.status_code === 2;
+
+                return (
+                  <div
+                    key={span.span_id}
+                    ref={isSelected ? selectedRowRef : undefined}
+                    onClick={() => handleSelectSpan(span)}
+                    className={`flex group cursor-pointer transition-all ${isSelected ? 'bg-blue-600/20 ring-1 ring-inset ring-blue-500/50' : 'hover:bg-slate-800/30'}`}
+                  >
+                    {/* Operation Info */}
+                    <div className="w-64 shrink-0 p-3 border-r border-slate-800/50 flex flex-col justify-center min-w-0 relative">
+                      {isSelected && <div className="absolute left-0 top-0 bottom-0 w-1 bg-blue-500"></div>}
+                      <div
+                        className="truncate"
+                        style={{ paddingLeft: `${span.depth * 16}px` }}
+                      >
+                        <div className="flex items-center mb-0.5">
+                          {span.depth > 0 && (
+                            <div className="absolute left-0 w-px bg-slate-700/50 h-full" style={{ left: `${(span.depth * 16) - 8}px` }}></div>
+                          )}
+                          <span className={`text-[10px] font-black uppercase px-1 rounded mr-2 ${getServiceColor(span.service_name)} text-white`}>
+                            {span.service_name}
+                          </span>
+                          {hasError && <AlertCircle size={12} className="text-rose-500 shrink-0" />}
+                        </div>
+                        <div className={`text-xs font-medium truncate ${isSelected ? 'text-blue-400' : 'text-slate-300'}`}>
+                          {span.span_name}
+                        </div>
+                      </div>
                     </div>
-                    
-                    <div 
-                      className={`h-5 rounded-sm relative flex items-center transition-all duration-500 group-hover:brightness-110 ${getServiceColor(span.service_name)} ${hasError ? 'ring-2 ring-rose-500 ring-offset-2 ring-offset-[#0f172a]' : 'shadow-lg shadow-black/20'}`}
-                      style={{ 
-                        left: `${left}%`, 
-                        width: `${width}%`,
-                        minWidth: '4px'
-                      }}
-                    >
-                      {/* Duration label inside or outside based on width */}
-                      <span className={`absolute whitespace-nowrap text-[10px] font-bold font-mono ${width > 15 ? 'left-2 text-white' : 'left-full ml-3 text-slate-400'}`}>
-                        {span.duration_ms.toFixed(2)} ms
-                      </span>
+
+                    {/* Timeline Bar */}
+                    <div className="flex-1 p-3 relative flex items-center min-w-[200px]">
+                      <div className="absolute inset-0 flex justify-between px-4 pointer-events-none">
+                        {[0, 25, 50, 75, 100].map(p => (
+                          <div key={p} className="h-full w-px bg-slate-800/30"></div>
+                        ))}
+                      </div>
+
+                      <div
+                        className={`h-5 rounded-sm relative flex items-center transition-all duration-500 group-hover:brightness-110 ${getServiceColor(span.service_name)} ${hasError ? 'ring-2 ring-rose-500 ring-offset-2 ring-offset-[#0f172a]' : 'shadow-lg shadow-black/20'}`}
+                        style={{
+                          left: `${left}%`,
+                          width: `${width}%`,
+                          minWidth: '4px'
+                        }}
+                      >
+                        {/* Duration label inside or outside based on width */}
+                        <span className={`absolute whitespace-nowrap text-[10px] font-bold font-mono ${width > 15 ? 'left-2 text-white' : 'left-full ml-3 text-slate-400'}`}>
+                          {span.duration_ms.toFixed(2)} ms
+                        </span>
+                      </div>
                     </div>
                   </div>
-                </div>
-              );
-            })}
-          </div>
+                );
+              })}
+            </div>
           </div>
         </div>
 
@@ -206,7 +209,7 @@ export default function TraceDetail() {
             <Info size={16} className="mr-2 text-blue-400" />
             <h2 className="text-xs font-bold text-slate-200 uppercase tracking-widest">상세 정보 (Metadata)</h2>
           </div>
-          
+
           {selectedSpan ? (
             <div className="flex-1 space-y-6 overflow-y-auto p-5">
               <section>
@@ -231,12 +234,7 @@ export default function TraceDetail() {
                 </h3>
                 <div className="grid grid-cols-1 gap-2">
                   {Object.entries(selectedSpan.attributes).length > 0 ? (
-                    Object.entries(selectedSpan.attributes).map(([k, v]) => (
-                      <div key={k} className="flex flex-col bg-slate-900/40 p-2.5 rounded-lg border border-slate-800 group/attr hover:border-slate-700 transition-colors">
-                        <span className="text-[10px] text-indigo-400 font-bold mb-1 uppercase tracking-tighter truncate">{k}</span>
-                        <span className="text-slate-300 break-all font-mono text-xs leading-relaxed">{String(v)}</span>
-                      </div>
-                    ))
+                    <LogAttributes attributes={selectedSpan.attributes} />
                   ) : (
                     <div className="text-center p-8 border border-dashed border-slate-800 rounded-lg">
                       <p className="text-slate-500 italic text-xs">기록된 부가 정보가 없습니다.</p>

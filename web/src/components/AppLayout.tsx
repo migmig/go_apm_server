@@ -3,6 +3,7 @@ import { Link, useLocation } from 'react-router-dom';
 import { ChevronRight } from 'lucide-react';
 import SidebarNavigation from './SidebarNavigation';
 import { getPageMeta } from '../lib/navigation';
+import { Toaster } from 'react-hot-toast';
 
 export default function AppLayout({ children }: { children: React.ReactNode }) {
   const location = useLocation();
@@ -28,6 +29,24 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
   return (
     <div className="min-h-screen bg-[#020617] text-slate-200">
+      <Toaster
+        position="top-right"
+        toastOptions={{
+          style: {
+            background: '#0f172a',
+            color: '#e2e8f0',
+            border: '1px solid #1e293b',
+            borderRadius: '12px',
+            fontSize: '13px',
+          },
+          error: {
+            iconTheme: { primary: '#f43f5e', secondary: '#0f172a' },
+          },
+          success: {
+            iconTheme: { primary: '#10b981', secondary: '#0f172a' },
+          },
+        }}
+      />
       <SidebarNavigation
         mobileOpen={mobileOpen}
         onMobileClose={() => setMobileOpen(false)}

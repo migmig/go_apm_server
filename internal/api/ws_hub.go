@@ -314,6 +314,7 @@ func spansToTraceSummaries(spans []storage.Span) []storage.TraceSummary {
 				DurationMs:  float64(sp.DurationNs) / 1e6,
 				StatusCode:  sp.StatusCode,
 				StartTime:   sp.StartTime,
+				Attributes:  sp.Attributes,
 			}
 			continue
 		}
@@ -324,6 +325,7 @@ func spansToTraceSummaries(spans []storage.Span) []storage.TraceSummary {
 			ts.DurationMs = float64(sp.DurationNs) / 1e6
 			ts.StatusCode = sp.StatusCode
 			ts.StartTime = sp.StartTime
+			ts.Attributes = sp.Attributes
 		}
 	}
 

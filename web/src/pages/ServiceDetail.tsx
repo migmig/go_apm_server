@@ -7,6 +7,8 @@ import { PageEmptyState, PageErrorState, PageLoadingState } from '../components/
 import { getAsyncViewState, getErrorMessage } from '../lib/request-state';
 import TraceList from '../components/traces/TraceList';
 import LogItem from '../components/logs/LogItem';
+import StatCard from '../components/ui/StatCard';
+import { getServiceHealth } from '../lib/health';
 
 export default function ServiceDetail() {
   const { serviceName } = useParams();
@@ -78,14 +80,13 @@ export default function ServiceDetail() {
     );
   }
 
-  const errorRate = service.span_count > 0 ? service.error_count / service.span_count : 0;
-  const isUnhealthy = errorRate > 0.05 || service.avg_latency_ms > 500;
+  const { errorRate, isUnhealthy } = getServiceHealth(service.span_count, service.error_count, service.avg_latency_ms);
 
   const statCards = [
-    { label: 'Span 수', value: new Intl.NumberFormat('ko-KR').format(service.span_count), icon: Layers, color: 'text-blue-400', bg: 'bg-blue-500/10' },
-    { label: '에러 수', value: new Intl.NumberFormat('ko-KR').format(service.error_count), icon: AlertCircle, color: errorRate > 0.05 ? 'text-rose-500' : 'text-rose-400', bg: 'bg-rose-500/10', warning: errorRate > 0.05 },
-    { label: '평균 응답시간', value: `${service.avg_latency_ms.toFixed(2)}ms`, icon: Clock, color: 'text-emerald-400', bg: 'bg-emerald-500/10' },
-    { label: 'P99 응답시간', value: `${service.p99_latency_ms.toFixed(2)}ms`, icon: Zap, color: service.p99_latency_ms > 1000 ? 'text-amber-400' : 'text-amber-400', bg: 'bg-amber-500/10' },
+    { label: 'Span 수', value: new Intl.NumberFormat('ko-KR').format(service.span_count), icon: Layers, colorClass: 'text-blue-400', bgClass: 'bg-blue-500/10' },
+    { label: '에러 수', value: new Intl.NumberFormat('ko-KR').format(service.error_count), icon: AlertCircle, colorClass: errorRate > 0.05 ? 'text-rose-500' : 'text-rose-400', bgClass: 'bg-rose-500/10', warning: errorRate > 0.05 },
+    { label: '평균 응답시간', value: `${service.avg_latency_ms.toFixed(2)}ms`, icon: Clock, colorClass: 'text-emerald-400', bgClass: 'bg-emerald-500/10' },
+    { label: 'P99 응답시간', value: `${service.p99_latency_ms.toFixed(2)}ms`, icon: Zap, colorClass: service.p99_latency_ms > 1000 ? 'text-amber-400' : 'text-amber-400', bgClass: 'bg-amber-500/10' },
   ];
 
   return (
@@ -121,20 +122,15 @@ export default function ServiceDetail() {
       {/* Stat Cards */}
       <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
         {statCards.map((card) => (
-          <div
+          <StatCard
             key={card.label}
-            className={`bg-[#0f172a] p-6 rounded-xl border ${card.warning ? 'border-rose-500/50' : 'border-slate-800'} shadow-sm`}
-          >
-            <div className="flex items-center justify-between mb-4">
-              <span className="text-xs font-bold text-slate-400 uppercase tracking-wider">{card.label}</span>
-              <div className={`${card.bg} ${card.color} p-2 rounded-lg`}>
-                <card.icon size={16} />
-              </div>
-            </div>
-            <p className={`text-2xl sm:text-3xl font-bold font-mono tracking-tight ${card.warning ? 'text-rose-400' : 'text-slate-100'}`}>
-              {card.value}
-            </p>
-          </div>
+            label={card.label}
+            value={card.value}
+            icon={card.icon}
+            colorClass={card.colorClass}
+            bgClass={card.bgClass}
+            warning={card.warning}
+          />
         ))}
       </div>
 
