@@ -69,7 +69,7 @@ function TraceMobileCard({ trace }: { trace: TraceSummary }) {
       <div className="mt-4 grid grid-cols-2 gap-3 rounded-xl border border-slate-800 bg-[#0f172a] p-3 text-xs text-slate-400">
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">요청 시간</p>
-          <p className="mt-1 font-mono text-slate-300">{format(trace.start_time / 1e6, 'MM.dd HH:mm:ss')}</p>
+          <p className="mt-1 font-mono text-slate-300">{format(trace.start_time / 1e6, 'yyyy-MM-dd HH:mm:ss')}</p>
         </div>
         <div>
           <p className="text-[10px] font-bold uppercase tracking-[0.18em] text-slate-500">Span 수</p>
@@ -136,12 +136,15 @@ function TraceTable({ traces }: { traces: TraceSummary[] }) {
           {traces.map((trace) => (
             <tr key={trace.trace_id} className="group transition-colors hover:bg-slate-800/40">
               <td className="whitespace-nowrap px-6 py-4 text-xs font-mono text-slate-400">
-                {format(trace.start_time / 1e6, 'MMM dd, HH:mm:ss.SSS')}
+                {format(trace.start_time / 1e6, 'yyyy-MM-dd HH:mm:ss')}
               </td>
               <td className="whitespace-nowrap px-6 py-4">
-                <span className="text-xs font-mono text-slate-500 transition-colors group-hover:text-slate-300">
+                <Link
+                  to={`/traces/${trace.trace_id}`}
+                  className="text-xs font-mono text-blue-400 transition-colors hover:text-blue-300 hover:underline"
+                >
                   {trace.trace_id.substring(0, 8)}...
-                </span>
+                </Link>
               </td>
               <td className="whitespace-nowrap px-6 py-4">
                 <div className="flex items-center">
@@ -149,7 +152,7 @@ function TraceTable({ traces }: { traces: TraceSummary[] }) {
                   <span className="text-sm font-semibold text-slate-200">{trace.root_service}</span>
                 </div>
               </td>
-              <td className="whitespace-nowrap px-6 py-4">
+              <td className="whitespace-nowrap px-6 py-4 max-w-[200px] truncate" title={trace.root_span}>
                 <span className="text-sm text-slate-400 transition-colors group-hover:text-slate-200">{trace.root_span}</span>
               </td>
               <td className="whitespace-nowrap px-6 py-4">

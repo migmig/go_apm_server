@@ -36,7 +36,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
 
       <div className="lg:pl-72">
         <header className="sticky top-0 z-20 border-b border-slate-800 bg-[#020617]/90 backdrop-blur">
-          <div className="mx-auto max-w-7xl px-4 py-4 md:px-6 lg:px-8">
+          <div className="mx-auto max-w-screen-2xl px-4 py-4 md:px-6 lg:px-8">
             <div className="flex items-start justify-between gap-4">
               <div className="min-w-0 flex-1">
                 <nav className="flex items-center gap-2 overflow-x-auto whitespace-nowrap text-xs text-slate-500">
@@ -80,7 +80,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
         </header>
 
         <main>
-          <div className="mx-auto max-w-7xl px-4 py-6 md:px-6 md:py-8 lg:px-8">
+          <div className="mx-auto max-w-screen-2xl px-4 py-6 md:px-6 md:py-8 lg:px-8">
             {children}
           </div>
         </main>
