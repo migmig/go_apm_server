@@ -5,6 +5,7 @@ import { format } from 'date-fns';
 import { Search, RefreshCw, Clock, ArrowRight, Loader2, CalendarDays, X } from 'lucide-react';
 import { PageEmptyState, PageErrorState, PageLoadingState, StatusBanner } from '../components/PageState';
 import { getAsyncViewState, getErrorMessage } from '../lib/request-state';
+import { useWSChannel, useWSMessage } from '../hooks/useWebSocket';
 
 interface TraceSummary {
   trace_id: string;
@@ -31,6 +32,16 @@ export default function Traces() {
   const [loadMoreError, setLoadMoreError] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const observer = useRef<IntersectionObserver | null>(null);
+
+  useWSChannel('traces');
+
+  useWSMessage('traces', useCallback((payload: TraceSummary[]) => {
+    setTraces((prev) => {
+      const newTraces = [...payload, ...prev];
+      return newTraces.slice(0, 200);
+    });
+    setLastUpdatedAt(new Date());
+  }, []));
 
   const startParam = searchParams.get('start');
   const endParam = searchParams.get('end');

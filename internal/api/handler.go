@@ -3,6 +3,7 @@ package api
 import (
 	"encoding/json"
 	"io/fs"
+	"log"
 	"net/http"
 	"path/filepath"
 	"runtime"
@@ -11,16 +12,41 @@ import (
 
 	"github.com/migmig/go_apm_server/internal/config"
 	"github.com/migmig/go_apm_server/internal/storage"
+	"nhooyr.io/websocket"
 )
 
 type Handler struct {
 	store     storage.Storage
 	cfg       *config.Config
 	startTime time.Time
+	hub       *Hub
 }
 
-func NewHandler(store storage.Storage, cfg *config.Config) *Handler {
-	return &Handler{store: store, cfg: cfg, startTime: time.Now()}
+func NewHandler(store storage.Storage, cfg *config.Config, hub *Hub) *Handler {
+	return &Handler{store: store, cfg: cfg, startTime: time.Now(), hub: hub}
+}
+
+func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
+	conn, err := websocket.Accept(w, r, &websocket.AcceptOptions{
+		InsecureSkipVerify: true,
+	})
+	if err != nil {
+		log.Printf("websocket accept error: %v", err)
+		return
+	}
+
+	client := &Client{
+		hub:      h.hub,
+		conn:     conn,
+		send:     make(chan []byte, sendBufSize),
+		channels: make(map[string]bool),
+		filter:   make(map[string]any),
+	}
+
+	h.hub.register <- client
+
+	go client.writePump(r.Context())
+	client.readPump(r.Context())
 }
 
 func (h *Handler) HandleHealth(w http.ResponseWriter, r *http.Request) {

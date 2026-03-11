@@ -44,7 +44,7 @@ func setupTestServer(t *testing.T) (*Handler, *storage.SQLiteStorage) {
 		{ServiceName: "test-svc", SeverityNumber: 9, SeverityText: "INFO", Body: "test log", Timestamp: 1000000000, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
 	})
 
-	return NewHandler(db, testConfig()), db
+	return NewHandler(db, testConfig(), NewHub(db)), db
 }
 
 func TestHealthEndpoint(t *testing.T) {

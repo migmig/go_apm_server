@@ -79,7 +79,7 @@ func setupTestEnvironment(t *testing.T) *testServer {
 	// Wait for receivers to start and retrieve their assigned ports
 	time.Sleep(100 * time.Millisecond)
 
-	apiHandler := api.NewHandler(store)
+	apiHandler := api.NewHandler(store, nil, api.NewHub(store))
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /api/services", apiHandler.HandleGetServices)
 	mux.HandleFunc("GET /api/traces", apiHandler.HandleGetTraces)

@@ -6,6 +6,7 @@ import { Activity, AlertCircle, Clock, Zap } from 'lucide-react';
 import { format } from 'date-fns';
 import { PageEmptyState, PageErrorState, PageLoadingState, StatusBanner } from '../components/PageState';
 import { getAsyncViewState, getErrorMessage } from '../lib/request-state';
+import { useWSChannel, useWSMessage, useWSStatus } from '../hooks/useWebSocket';
 
 function formatCount(value: number | undefined) {
   if (typeof value !== 'number' || Number.isNaN(value)) {
@@ -30,6 +31,19 @@ export default function Dashboard() {
   const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const wsStatus = useWSStatus();
+
+  useWSChannel('dashboard');
+
+  useWSMessage('stats', useCallback((payload: Stats) => {
+    setStats(payload);
+    setLastUpdatedAt(new Date());
+    setErrorMessage(null);
+  }, []));
+
+  useWSMessage('services', useCallback((payload: ServiceInfo[]) => {
+    setServices(payload);
+  }, []));
 
   const fetchData = useCallback(async (backgroundRefresh = false) => {
     if (backgroundRefresh) {
@@ -57,10 +71,10 @@ export default function Dashboard() {
     void fetchData();
     const interval = setInterval(() => {
       void fetchData(true);
-    }, 10000);
+    }, wsStatus === 'connected' ? 30000 : 10000);
 
     return () => clearInterval(interval);
-  }, [fetchData]);
+  }, [fetchData, wsStatus]);
 
   const hasData = stats !== null;
   const isEmpty = stats !== null && stats.total_traces === 0 && stats.total_spans === 0 && services.length === 0;

@@ -14,10 +14,11 @@ import (
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func NewServer(port int, store storage.Storage, cfg *config.Config) *http.Server {
-	h := NewHandler(store, cfg)
+func NewServer(port int, store storage.Storage, cfg *config.Config, hub *Hub) *http.Server {
+	h := NewHandler(store, cfg, hub)
 
 	mux := http.NewServeMux()
+	mux.HandleFunc("GET /ws", h.HandleWebSocket)
 	mux.Handle("GET /metrics", promhttp.Handler())
 	mux.HandleFunc("GET /health", h.HandleHealth)
 	mux.HandleFunc("GET /api/config", h.HandleGetConfig)
@@ -74,7 +75,7 @@ func NewServer(port int, store storage.Storage, cfg *config.Config) *http.Server
 		Addr:         fmt.Sprintf(":%d", port),
 		Handler:      cors(mux),
 		ReadTimeout:  30 * time.Second,
-		WriteTimeout: 30 * time.Second,
+		WriteTimeout: 0, // WebSocket 장기 연결 허용
 	}
 }
 

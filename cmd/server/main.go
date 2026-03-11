@@ -51,7 +51,14 @@ func main() {
 	}
 	log.Printf("HTTP Receiver started on :%d\n", cfg.Receiver.HTTPPort)
 
-	apiServer := api.NewServer(cfg.Server.APIPort, store, cfg)
+	hub := api.NewHub(store)
+	go hub.Run(ctx)
+
+	proc.SetOnFlush(func(event processor.FlushEvent) {
+		hub.BroadcastFlush(ctx, event.Spans, event.Logs)
+	})
+
+	apiServer := api.NewServer(cfg.Server.APIPort, store, cfg, hub)
 	go func() {
 		if err := apiServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("api server error: %v", err)

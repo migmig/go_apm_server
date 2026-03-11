@@ -2,9 +2,10 @@ import { useCallback, useEffect, useState } from 'react';
 import client from '../api/client';
 import { Link } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Search, Terminal, RefreshCcw, Filter } from 'lucide-react';
+import { Search, Terminal, RefreshCcw, Filter, Play, Pause } from 'lucide-react';
 import { PageEmptyState, PageErrorState, PageLoadingState, StatusBanner } from '../components/PageState';
 import { getAsyncViewState, getErrorMessage } from '../lib/request-state';
+import { useWSChannel, useWSMessage, useWSStatus } from '../hooks/useWebSocket';
 
 interface LogRecord {
   timestamp: string;
@@ -24,6 +25,35 @@ export default function Logs() {
   const [searchBody, setSearchBody] = useState('');
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
+  const [streaming, setStreaming] = useState(false);
+  const wsStatus = useWSStatus();
+  const { subscribe, unsubscribe } = useWSChannel('logs', false);
+
+  const toggleStreaming = useCallback(() => {
+    if (streaming) {
+      unsubscribe();
+      setStreaming(false);
+    } else {
+      subscribe({ service: serviceName });
+      setStreaming(true);
+    }
+  }, [streaming, subscribe, unsubscribe, serviceName]);
+
+  useWSMessage('logs', useCallback((payload: LogRecord[]) => {
+    if (!streaming) return;
+    setLogs((prev) => {
+      const newLogs = [...payload, ...prev];
+      return newLogs.slice(0, 500);
+    });
+    setLastUpdatedAt(new Date());
+  }, [streaming]));
+
+  // 필터 변경 시 재구독
+  useEffect(() => {
+    if (!streaming) return;
+    unsubscribe();
+    subscribe({ service: serviceName });
+  }, [serviceName, streaming, subscribe, unsubscribe]);
 
   const fetchLogs = useCallback(async (backgroundRefresh = false) => {
     if (backgroundRefresh) {
@@ -52,13 +82,15 @@ export default function Logs() {
   }, [searchBody, serviceName]);
 
   useEffect(() => {
+    if (streaming) return;
+
     void fetchLogs();
     const interval = setInterval(() => {
       void fetchLogs(true);
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [fetchLogs]);
+  }, [fetchLogs, streaming]);
 
   const getSeverityRowStyle = (num: number) => {
     if (num >= 17) return 'bg-rose-500/5 border-l-rose-500'; // ERROR
@@ -99,8 +131,21 @@ export default function Logs() {
             <p className="mt-1 text-xs font-mono text-slate-300">{lastUpdatedAt ? format(lastUpdatedAt, 'HH:mm:ss') : '미수신'}</p>
           </div>
           <button
+            onClick={toggleStreaming}
+            disabled={wsStatus !== 'connected'}
+            className={`inline-flex items-center gap-2 px-4 py-2 rounded-lg text-sm font-medium border transition-colors ${
+              streaming
+                ? 'bg-emerald-500/10 text-emerald-400 border-emerald-500/30 hover:bg-emerald-500/20'
+                : 'bg-slate-800 text-slate-200 border-slate-700 hover:bg-slate-700'
+            } disabled:opacity-40 disabled:cursor-not-allowed`}
+          >
+            {streaming ? <Pause size={16} /> : <Play size={16} />}
+            {streaming ? '스트리밍 중지' : '실시간 스트리밍'}
+          </button>
+          <button
             onClick={() => void fetchLogs()}
-            className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-700"
+            disabled={streaming}
+            className="bg-slate-800 hover:bg-slate-700 text-slate-200 px-4 py-2 rounded-lg text-sm font-medium transition-colors border border-slate-700 disabled:opacity-40 disabled:cursor-not-allowed"
           >
             지금 갱신
           </button>

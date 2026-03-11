@@ -2,6 +2,7 @@ import { Activity, ChevronRight, Menu, X } from 'lucide-react';
 import { Link, useLocation } from 'react-router-dom';
 import { cn } from '../lib/cn';
 import { navigationSections } from '../lib/navigation';
+import { useWSStatus } from '../hooks/useWebSocket';
 
 interface SidebarNavigationProps {
   mobileOpen: boolean;
@@ -54,6 +55,29 @@ function NavItems({ onNavigate }: { onNavigate?: () => void }) {
   );
 }
 
+const statusConfig = {
+  connected:    { color: 'bg-emerald-500',             text: '실시간 연결', textColor: 'text-emerald-400' },
+  disconnected: { color: 'bg-rose-500',                text: '연결 끊김',   textColor: 'text-rose-400' },
+  reconnecting: { color: 'bg-amber-500 animate-pulse', text: '재연결 중...', textColor: 'text-amber-400' },
+} as const;
+
+function WSStatusIndicator() {
+  const wsStatus = useWSStatus();
+  const sc = statusConfig[wsStatus];
+
+  return (
+    <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
+      <div className="flex items-center">
+        <div className={`mr-2 h-2.5 w-2.5 rounded-full ${sc.color}`} />
+        <span className={`text-sm font-medium ${sc.textColor}`}>{sc.text}</span>
+      </div>
+      <p className="mt-2 text-xs leading-5 text-slate-500">
+        WebSocket을 통해 실시간 데이터를 수신합니다.
+      </p>
+    </div>
+  );
+}
+
 function NavigationPanel({
   className,
   onNavigate,
@@ -97,15 +121,7 @@ function NavigationPanel({
 
       <NavItems onNavigate={onNavigate} />
 
-      <div className="mt-6 rounded-xl border border-slate-800 bg-slate-900/60 px-4 py-3">
-        <div className="flex items-center">
-          <div className="mr-2 h-2.5 w-2.5 rounded-full bg-emerald-500" />
-          <span className="text-sm text-slate-200">서버 상태: 정상</span>
-        </div>
-        <p className="mt-2 text-xs leading-5 text-slate-500">
-          모바일에서는 메뉴를 닫아 본문 공간을 확보할 수 있습니다.
-        </p>
-      </div>
+      <WSStatusIndicator />
     </div>
   );
 }
