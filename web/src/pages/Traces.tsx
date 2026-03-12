@@ -17,6 +17,9 @@ export default function Traces() {
   const [loading, setLoading] = useState(true);
   const [loadingMore, setLoadingMore] = useState(false);
   const [serviceName, setServiceName] = useState('');
+  const [statusCode, setStatusCode] = useState('');
+  const [minDuration, setMinDuration] = useState('');
+  const [timePreset, setTimePreset] = useState('');
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -52,7 +55,20 @@ export default function Traces() {
         limit: PAGE_SIZE,
         offset: 0,
       };
-      if (startParam) params.start = startParam;
+      if (statusCode) params.status = statusCode;
+      if (minDuration) params.min_duration = minDuration;
+      
+      let computedStart = startParam;
+      if (timePreset && !startParam) {
+         // handle preset
+         const now = Date.now();
+         if (timePreset === '5m') computedStart = String(now - 5 * 60 * 1000);
+         else if (timePreset === '15m') computedStart = String(now - 15 * 60 * 1000);
+         else if (timePreset === '1h') computedStart = String(now - 60 * 60 * 1000);
+         else if (timePreset === '24h') computedStart = String(now - 24 * 60 * 60 * 1000);
+      }
+      
+      if (computedStart) params.start = computedStart;
       if (endParam) params.end = endParam;
 
       const res = await client.get('/traces', { params });
@@ -83,7 +99,19 @@ export default function Traces() {
         limit: PAGE_SIZE,
         offset: nextOffset,
       };
-      if (startParam) params.start = startParam;
+      if (statusCode) params.status = statusCode;
+      if (minDuration) params.min_duration = minDuration;
+
+      let computedStart = startParam;
+      if (timePreset && !startParam) {
+         const now = Date.now();
+         if (timePreset === '5m') computedStart = String(now - 5 * 60 * 1000);
+         else if (timePreset === '15m') computedStart = String(now - 15 * 60 * 1000);
+         else if (timePreset === '1h') computedStart = String(now - 60 * 60 * 1000);
+         else if (timePreset === '24h') computedStart = String(now - 24 * 60 * 60 * 1000);
+      }
+
+      if (computedStart) params.start = computedStart;
       if (endParam) params.end = endParam;
 
       const res = await client.get('/traces', { params });
@@ -148,28 +176,70 @@ export default function Traces() {
         </div>
       </div>
 
-      <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="flex flex-col md:flex-row md:items-center gap-4 bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-sm">
-        <div className="flex items-center space-x-3 flex-1 bg-slate-900/50 rounded-lg px-3 border border-slate-800 focus-within:border-blue-500/50 transition-colors">
-          <Search size={18} className="text-slate-500" />
-          <input
-            type="text"
-            placeholder="서비스 이름으로 검색..."
-            className="w-full bg-transparent border-none focus:ring-0 text-sm py-2.5 text-slate-200 placeholder-slate-600"
-            value={serviceName}
-            onChange={(e) => setServiceName(e.target.value)}
-          />
+      <form onSubmit={(e) => { e.preventDefault(); handleSearch(); }} className="flex flex-col gap-4 bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-sm">
+        <div className="flex flex-col md:flex-row md:items-center gap-4">
+          <div className="flex items-center space-x-3 flex-1 bg-slate-900/50 rounded-lg px-3 border border-slate-800 focus-within:border-blue-500/50 transition-colors">
+            <Search size={18} className="text-slate-500" />
+            <input
+              type="text"
+              aria-label="서비스 이름 검색 폼"
+              placeholder="서비스 이름으로 검색..."
+              className="w-full bg-transparent border-none focus:ring-0 text-sm py-2.5 text-slate-200 placeholder-slate-600"
+              value={serviceName}
+              onChange={(e) => setServiceName(e.target.value)}
+            />
+          </div>
+          
+          <div className="flex flex-wrap items-center gap-2">
+            <select
+              title="상태 필터"
+              aria-label="상태 코드 필터"
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500/50"
+              value={statusCode}
+              onChange={(e) => setStatusCode(e.target.value)}
+            >
+              <option value="">모든 상태</option>
+              <option value="1">성공 (OK)</option>
+              <option value="2">오류 (Error)</option>
+            </select>
+
+            <input
+              type="number"
+              aria-label="최소 지연 시간 필터"
+              placeholder="최소 지연 (ms)"
+              className="w-32 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500/50 placeholder-slate-600"
+              value={minDuration}
+              onChange={(e) => setMinDuration(e.target.value)}
+            />
+
+            <select
+              title="시간 필터"
+              aria-label="상대 시간 프리셋 필터"
+              className="bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500/50 disabled:opacity-50"
+              value={timePreset}
+              onChange={(e) => setTimePreset(e.target.value)}
+              disabled={!!startParam || !!endParam || !!dateLabel}
+            >
+              <option value="">전체 시간</option>
+              <option value="5m">최근 5분</option>
+              <option value="15m">최근 15분</option>
+              <option value="1h">최근 1시간</option>
+              <option value="24h">최근 24시간</option>
+            </select>
+          </div>
+          <div className="h-10 w-px bg-slate-800 hidden md:block"></div>
+          <button
+            type="submit"
+            aria-label="검색 조건으로 조회"
+            disabled={loading}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+          >
+            <span className="inline-flex items-center">
+              <RefreshCw size={16} className={loading ? 'mr-2 animate-spin' : 'mr-2'} />
+              조회하기
+            </span>
+          </button>
         </div>
-        <div className="h-10 w-px bg-slate-800 hidden md:block"></div>
-        <button
-          type="submit"
-          disabled={loading}
-          className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
-        >
-          <span className="inline-flex items-center">
-            <RefreshCw size={16} className={loading ? 'mr-2 animate-spin' : 'mr-2'} />
-            조회하기
-          </span>
-        </button>
       </form>
 
       {dateLabel && (
@@ -190,7 +260,7 @@ export default function Traces() {
 
 
 
-      <div className="bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm overflow-hidden">
+      <div className="bg-[#0f172a] rounded-xl border border-slate-800 shadow-sm overflow-hidden" aria-live="polite">
         {viewState === 'loading' ? (
           <PageLoadingState
             className="min-h-[420px] rounded-none border-0"

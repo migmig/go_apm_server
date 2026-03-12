@@ -135,21 +135,28 @@ function TraceTable({ traces, sortField, sortOrder, onSort }: TraceTableProps) {
     return sortOrder === 'asc' ? <ChevronUp size={12} className="ml-1 inline-block" /> : <ChevronDown size={12} className="ml-1 inline-block" />;
   };
 
-  const SortableHeader = ({ field, label }: { field: SortField; label: string }) => (
-    <th
-      className="cursor-pointer px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors select-none"
-      onClick={() => onSort(field)}
-    >
-      <div className="flex items-center">
-        {label}
-        {getSortIcon(field)}
-      </div>
-    </th>
-  );
+  const SortableHeader = ({ field, label }: { field: SortField; label: string }) => {
+    const isSorted = sortField === field;
+    const ariaSort = isSorted ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none';
+    
+    return (
+      <th
+        className="cursor-pointer px-6 py-4 text-left text-[10px] font-bold uppercase tracking-widest text-slate-500 hover:text-slate-300 transition-colors select-none"
+        onClick={() => onSort(field)}
+        role="columnheader"
+        aria-sort={ariaSort}
+      >
+        <div className="flex items-center">
+          {label}
+          {getSortIcon(field)}
+        </div>
+      </th>
+    );
+  };
 
   return (
     <div className="hidden overflow-x-auto md:block">
-      <table className="min-w-full divide-y divide-slate-800">
+      <table className="min-w-full divide-y divide-slate-800" aria-label="서비스 추적 요약 목록 테이블">
         <thead className="bg-slate-900/50">
           <tr>
             <SortableHeader field="start_time" label="요청 시간" />

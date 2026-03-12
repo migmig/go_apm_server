@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import client from '../api/client';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Search, Terminal, RefreshCcw, Filter, Play, Pause } from 'lucide-react';
+import { Search, Terminal, RefreshCcw, Filter, Play, Pause, X } from 'lucide-react';
 import { PageEmptyState, PageErrorState, PageLoadingState } from '../components/PageState';
 import { getAsyncViewState, getErrorMessage } from '../lib/request-state';
 import { useWSChannel, useWSMessage, useWSStatus } from '../hooks/useWebSocket';
@@ -25,6 +25,7 @@ export interface LogRecord {
 }
 
 export default function Logs() {
+  const [searchParams, setSearchParams] = useSearchParams();
   const [logs, setLogs] = useState<LogRecord[]>([]);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
@@ -70,12 +71,16 @@ export default function Logs() {
     }
 
     try {
-      const res = await client.get('/logs', {
-        params: {
-          service: serviceName,
-          search: searchBody,
-        },
-      });
+      const traceId = searchParams.get('trace_id');
+      const spanId = searchParams.get('span_id');
+      const params: Record<string, any> = {
+        service: serviceName,
+        search: searchBody,
+      };
+      if (traceId) params.trace_id = traceId;
+      if (spanId) params.span_id = spanId;
+
+      const res = await client.get('/logs', { params });
       setLogs(res.data.logs || []);
       setErrorMessage(null);
       setLastUpdatedAt(new Date());
@@ -102,7 +107,7 @@ export default function Logs() {
     }, 5000);
 
     return () => clearInterval(interval);
-  }, [fetchLogs, streaming]);
+  }, [fetchLogs, streaming, searchParams]);
 
 
   const viewState = getAsyncViewState({
@@ -152,6 +157,27 @@ export default function Logs() {
       </div>
 
 
+
+      {searchParams.get('trace_id') && (
+        <div className="flex items-center gap-2 bg-blue-500/10 border border-blue-500/20 rounded-lg px-4 py-2.5">
+          <Terminal size={16} className="text-blue-400" />
+          <span className="text-sm text-blue-300 font-medium">
+            트레이스 ID <span className="font-bold font-mono text-white">{searchParams.get('trace_id')?.substring(0, 8)}...</span> 연관 로그 조회 중
+          </span>
+          <button
+            onClick={() => {
+              searchParams.delete('trace_id');
+              searchParams.delete('span_id');
+              setSearchParams(searchParams);
+              void fetchLogs();
+            }}
+            className="ml-auto flex items-center gap-1 text-xs text-slate-400 hover:text-slate-200 transition-colors bg-slate-800 hover:bg-slate-700 rounded px-2 py-1 border border-slate-700 hover:border-slate-600"
+          >
+            <X size={12} />
+            필터 해제
+          </button>
+        </div>
+      )}
 
       <form onSubmit={(e) => { e.preventDefault(); void fetchLogs(); }} className="grid grid-cols-1 md:grid-cols-3 gap-4 bg-[#0f172a] p-4 rounded-xl border border-slate-800 shadow-sm">
         <div className="flex items-center space-x-3 bg-slate-900/50 rounded-lg px-3 border border-slate-800 focus-within:border-blue-500/50 transition-colors">

@@ -68,7 +68,7 @@ func (h *Handler) HandleGetSystem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"version":             "v0.1.0-alpha",
+		"version":             "v0.4.0-alpha",
 		"go_version":          runtime.Version(),
 		"os":                  runtime.GOOS,
 		"arch":                runtime.GOARCH,
@@ -270,6 +270,7 @@ func (h *Handler) HandleGetLogs(w http.ResponseWriter, r *http.Request) {
 	filter := storage.LogFilter{
 		ServiceName: q.Get("service"),
 		TraceID:     q.Get("trace_id"),
+		SpanID:      q.Get("span_id"),
 		SearchBody:  q.Get("search"),
 		Limit:       intParam(q.Get("limit"), 100),
 		Offset:      intParam(q.Get("offset"), 0),

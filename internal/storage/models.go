@@ -3,20 +3,32 @@ package storage
 import "time"
 
 type Span struct {
-	TraceID            string
-	SpanID             string
-	ParentSpanID       string
-	ServiceName        string
-	SpanName           string
-	SpanKind           int32
-	StartTime          int64 // UnixNano
-	EndTime            int64
-	DurationNs         int64
-	StatusCode         int32
-	StatusMessage      string
-	Attributes         map[string]any
-	Events             []SpanEvent
-	ResourceAttributes map[string]any
+	TraceID              string
+	SpanID               string
+	ParentSpanID         string
+	ServiceName          string
+	SpanName             string
+	SpanKind             int32
+	StartTime            int64 // UnixNano
+	EndTime              int64
+	DurationNs           int64
+	StatusCode           int32
+	StatusMessage        string
+	Attributes           map[string]any
+	Events               []SpanEvent
+	Links                []SpanLink
+	ResourceAttributes   map[string]any
+	InstrumentationScope map[string]any
+	TraceState           string
+	Flags                int32
+}
+
+type SpanLink struct {
+	TraceID    string         `json:"trace_id"`
+	SpanID     string         `json:"span_id"`
+	TraceState string         `json:"trace_state"`
+	Flags      int32          `json:"flags"`
+	Attributes map[string]any `json:"attributes"`
 }
 
 type SpanEvent struct {
@@ -26,16 +38,20 @@ type SpanEvent struct {
 }
 
 type Metric struct {
-	ServiceName        string
-	MetricName         string
-	MetricType         int32 // 1=Gauge, 2=Sum, 3=Histogram
-	Value              float64
-	HistogramCount     int64
-	HistogramSum       float64
-	HistogramBuckets   []HistogramBucket
-	Attributes         map[string]any
-	ResourceAttributes map[string]any
-	Timestamp          int64
+	ServiceName            string
+	MetricName             string
+	MetricType             int32 // 1=Gauge, 2=Sum, 3=Histogram
+	Value                  float64
+	HistogramCount         int64
+	HistogramSum           float64
+	HistogramBuckets       []HistogramBucket
+	Attributes             map[string]any
+	ResourceAttributes     map[string]any
+	Timestamp              int64
+	StartTimestamp         int64
+	AggregationTemporality int32
+	IsMonotonic            bool
+	InstrumentationScope   map[string]any
 }
 
 type HistogramBucket struct {
@@ -44,15 +60,17 @@ type HistogramBucket struct {
 }
 
 type LogRecord struct {
-	TraceID            string
-	SpanID             string
-	ServiceName        string
-	SeverityNumber     int32
-	SeverityText       string
-	Body               string
-	Attributes         map[string]any
-	ResourceAttributes map[string]any
-	Timestamp          int64
+	TraceID              string
+	SpanID               string
+	ServiceName          string
+	SeverityNumber       int32
+	SeverityText         string
+	Body                 string
+	Attributes           map[string]any
+	ResourceAttributes   map[string]any
+	Timestamp            int64
+	ObservedTimestamp    int64
+	InstrumentationScope map[string]any
 }
 
 type TraceSummary struct {
@@ -120,6 +138,7 @@ type MetricFilter struct {
 type LogFilter struct {
 	ServiceName string
 	TraceID     string
+	SpanID      string
 	SeverityMin int32
 	SearchBody  string
 	StartTime   time.Time

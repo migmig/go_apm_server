@@ -19,8 +19,12 @@ type ServerConfig struct {
 }
 
 type ReceiverConfig struct {
-	GRPCPort int `yaml:"grpc_port" json:"grpc_port"`
-	HTTPPort int `yaml:"http_port" json:"http_port"`
+	GRPCPort    int    `yaml:"grpc_port" json:"grpc_port"`
+	HTTPPort    int    `yaml:"http_port" json:"http_port"`
+	TLSEnabled  bool   `yaml:"tls_enabled" json:"tls_enabled"`
+	TLSCertPath string `yaml:"tls_cert_path" json:"tls_cert_path"`
+	TLSKeyPath  string `yaml:"tls_key_path" json:"tls_key_path"`
+	MaxBodySize int    `yaml:"max_body_size" json:"max_body_size"` // in MB
 }
 
 type ProcessorConfig struct {
@@ -38,7 +42,7 @@ type StorageConfig struct {
 func defaults() Config {
 	return Config{
 		Server:   ServerConfig{APIPort: 8080},
-		Receiver: ReceiverConfig{GRPCPort: 4317, HTTPPort: 4318},
+		Receiver: ReceiverConfig{GRPCPort: 4317, HTTPPort: 4318, TLSEnabled: false, MaxBodySize: 10},
 		Processor: ProcessorConfig{
 			BatchSize:     1000,
 			FlushInterval: "2s",
@@ -80,6 +84,22 @@ func applyEnv(cfg *Config) {
 	if v := os.Getenv("APM_RECEIVER_HTTP_PORT"); v != "" {
 		if n, err := strconv.Atoi(v); err == nil {
 			cfg.Receiver.HTTPPort = n
+		}
+	}
+	if v := os.Getenv("APM_RECEIVER_TLS_ENABLED"); v != "" {
+		if b, err := strconv.ParseBool(v); err == nil {
+			cfg.Receiver.TLSEnabled = b
+		}
+	}
+	if v := os.Getenv("APM_RECEIVER_TLS_CERT_PATH"); v != "" {
+		cfg.Receiver.TLSCertPath = v
+	}
+	if v := os.Getenv("APM_RECEIVER_TLS_KEY_PATH"); v != "" {
+		cfg.Receiver.TLSKeyPath = v
+	}
+	if v := os.Getenv("APM_RECEIVER_MAX_BODY_SIZE"); v != "" {
+		if n, err := strconv.Atoi(v); err == nil {
+			cfg.Receiver.MaxBodySize = n
 		}
 	}
 	if v := os.Getenv("APM_PROCESSOR_BATCH_SIZE"); v != "" {

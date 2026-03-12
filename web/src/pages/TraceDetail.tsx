@@ -1,7 +1,7 @@
 import { useEffect, useState, useMemo, useRef, useCallback } from 'react';
 import { useParams, Link } from 'react-router-dom';
 import client from '../api/client';
-import { ChevronLeft, Clock, Server, Layers, Info, AlertCircle } from 'lucide-react';
+import { ChevronLeft, Clock, Server, Layers, Info, AlertCircle, AlertTriangle, Zap, ArrowDown } from 'lucide-react';
 import { getServiceColor } from '../lib/theme';
 import LogAttributes from '../components/ui/LogAttributes';
 import CopyButton from '../components/ui/CopyButton';
@@ -32,6 +32,8 @@ export default function TraceDetail() {
   const [loading, setLoading] = useState(true);
   const [selectedSpan, setSelectedSpan] = useState<Span | null>(null);
   const selectedRowRef = useRef<HTMLDivElement | null>(null);
+
+  const [filterMode, setFilterMode] = useState<'all' | 'error' | 'slow'>('all');
 
   const handleSelectSpan = useCallback((span: Span) => {
     setSelectedSpan(span);
@@ -102,6 +104,19 @@ export default function TraceDetail() {
     return { minStart, maxEnd, totalDuration: maxEnd - minStart };
   }, [spans]);
 
+  const incidentSummary = useMemo(() => {
+    const errors = spans.filter(s => s.status_code === 2);
+    const top3Slowest = [...spans].sort((a, b) => b.duration_ms - a.duration_ms).slice(0, 3);
+    return { errorCount: errors.length, top3Slowest };
+  }, [spans]);
+
+  const displayNodes = useMemo(() => {
+    if (filterMode === 'all') return flattenedNodes;
+    if (filterMode === 'error') return flattenedNodes.filter(n => n.status_code === 2);
+    if (filterMode === 'slow') return flattenedNodes.filter(n => n.duration_ms >= 500);
+    return flattenedNodes;
+  }, [flattenedNodes, filterMode]);
+
   if (loading) return <div className="flex items-center justify-center h-full text-slate-400 animate-pulse font-mono">요청 구조 재구성 중...</div>;
   if (spans.length === 0) return <div className="p-8 text-center text-slate-400">요청 ID <span className="font-mono text-slate-300">{traceId}</span>를 찾을 수 없습니다.</div>;
 
@@ -129,6 +144,59 @@ export default function TraceDetail() {
         </div>
       </div>
 
+      {/* Incident Summary Card */}
+      <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+        <div className="rounded-xl border border-slate-800 bg-[#0f172a] p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className={`p-3 rounded-lg ${incidentSummary.errorCount > 0 ? 'bg-red-500/10 text-red-500' : 'bg-emerald-500/10 text-emerald-500'}`}>
+              <AlertTriangle size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">에러 발생 스팬</p>
+              <p className="mt-1 text-2xl font-bold text-slate-100">{incidentSummary.errorCount}<span className="text-sm font-medium text-slate-500 ml-1">/{spans.length}</span></p>
+            </div>
+          </div>
+          <div className="flex gap-2">
+            <button 
+              onClick={() => setFilterMode(filterMode === 'error' ? 'all' : 'error')}
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors border ${filterMode === 'error' ? 'bg-red-500/20 text-red-400 border-red-500/30' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'}`}
+            >
+              오류만 보기
+            </button>
+          </div>
+        </div>
+
+        <div className="rounded-xl border border-slate-800 bg-[#0f172a] p-4 flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-3 rounded-lg bg-amber-500/10 text-amber-500">
+              <Zap size={20} />
+            </div>
+            <div>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">가장 느린 작업 Top 3</p>
+              <div className="mt-1 flex flex-col gap-0.5 text-xs text-slate-300">
+                {incidentSummary.top3Slowest.map((span, idx) => (
+                  <div key={idx} className="flex items-center gap-2 cursor-pointer hover:text-white" onClick={() => setSelectedSpan(span)}>
+                    <span className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[10px] text-slate-500">{idx + 1}</span>
+                    <span className={`truncate max-w-[120px] ${getServiceColor(span.service_name).replace('bg-', 'text-')}`}>{span.service_name}</span>
+                    <ArrowDown size={10} className="text-slate-600" />
+                    <span className="font-mono text-amber-400/80">{span.duration_ms.toFixed(2)}ms</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+          <div className="flex gap-2 h-max">
+            <button 
+              onClick={() => setFilterMode(filterMode === 'slow' ? 'all' : 'slow')}
+              title="500ms 이상 지연 작업"
+              className={`px-3 py-1.5 text-xs font-bold rounded-lg transition-colors border ${filterMode === 'slow' ? 'bg-amber-500/20 text-amber-400 border-amber-500/30' : 'bg-slate-900 border-slate-700 text-slate-400 hover:text-slate-200'}`}
+            >
+              지연만 보기
+            </button>
+          </div>
+        </div>
+      </div>
+
       <div className="grid grid-cols-1 gap-6 xl:grid-cols-4">
         {/* Waterfall Chart */}
         <div className="flex flex-col overflow-x-auto rounded-xl border border-slate-800 bg-[#0f172a] shadow-sm xl:col-span-3 xl:max-h-[72vh]">
@@ -142,7 +210,9 @@ export default function TraceDetail() {
             </div>
 
             <div className="divide-y divide-slate-800/30 overflow-y-auto scrollbar-hide xl:flex-1">
-              {flattenedNodes.map((span) => {
+              {displayNodes.length === 0 ? (
+                <div className="p-8 text-center text-slate-500 text-sm">해당 조건에 일치하는 스팬이 없습니다.</div>
+              ) : displayNodes.map((span) => {
                 const left = traceStats.totalDuration > 0 ? ((span.start_time - traceStats.minStart) / traceStats.totalDuration) * 100 : 0;
                 const width = traceStats.totalDuration > 0 ? Math.max(((span.duration_ms * 1e6) / traceStats.totalDuration) * 100, 0.2) : 0.2;
                 const isSelected = selectedSpan?.span_id === span.span_id;

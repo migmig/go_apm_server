@@ -21,7 +21,11 @@ CREATE TABLE IF NOT EXISTS spans (
     status_message  TEXT DEFAULT '',
     attributes      TEXT DEFAULT '{}',
     events          TEXT DEFAULT '[]',
+    links           TEXT DEFAULT '[]',
     resource_attributes TEXT DEFAULT '{}',
+    instrumentation_scope TEXT DEFAULT '{}',
+    trace_state     TEXT DEFAULT '',
+    flags           INTEGER DEFAULT 0,
     created_at      INTEGER NOT NULL
 );
 
@@ -42,6 +46,10 @@ CREATE TABLE IF NOT EXISTS metrics (
     attributes        TEXT DEFAULT '{}',
     resource_attributes TEXT DEFAULT '{}',
     timestamp         INTEGER NOT NULL,
+    start_timestamp   INTEGER DEFAULT 0,
+    aggregation_temporality INTEGER DEFAULT 0,
+    is_monotonic      BOOLEAN DEFAULT 0,
+    instrumentation_scope TEXT DEFAULT '{}',
     created_at        INTEGER NOT NULL
 );
 
@@ -60,6 +68,8 @@ CREATE TABLE IF NOT EXISTS logs (
     attributes        TEXT DEFAULT '{}',
     resource_attributes TEXT DEFAULT '{}',
     timestamp         INTEGER NOT NULL,
+    observed_timestamp INTEGER DEFAULT 0,
+    instrumentation_scope TEXT DEFAULT '{}',
     created_at        INTEGER NOT NULL
 );
 
@@ -71,5 +81,22 @@ CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
 
 func migrate(ctx context.Context, db *sql.DB) error {
 	_, err := db.ExecContext(ctx, schema)
+
+	alterStmts := []string{
+		`ALTER TABLE spans ADD COLUMN instrumentation_scope TEXT DEFAULT '{}'`,
+		`ALTER TABLE metrics ADD COLUMN start_timestamp INTEGER DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN aggregation_temporality INTEGER DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN is_monotonic BOOLEAN DEFAULT 0`,
+		`ALTER TABLE metrics ADD COLUMN instrumentation_scope TEXT DEFAULT '{}'`,
+		`ALTER TABLE logs ADD COLUMN instrumentation_scope TEXT DEFAULT '{}'`,
+		`ALTER TABLE spans ADD COLUMN links TEXT DEFAULT '[]'`,
+		`ALTER TABLE spans ADD COLUMN trace_state TEXT DEFAULT ''`,
+		`ALTER TABLE spans ADD COLUMN flags INTEGER DEFAULT 0`,
+		`ALTER TABLE logs ADD COLUMN observed_timestamp INTEGER DEFAULT 0`,
+	}
+	for _, stmt := range alterStmts {
+		db.ExecContext(ctx, stmt)
+	}
+
 	return err
 }

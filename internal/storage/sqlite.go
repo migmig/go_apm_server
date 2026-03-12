@@ -193,8 +193,8 @@ func (s *SQLiteStorage) InsertSpans(ctx context.Context, spans []Span) error {
 		stmt, err := tx.PrepareContext(ctx, `INSERT INTO spans
 			(trace_id, span_id, parent_span_id, service_name, span_name, span_kind,
 			 start_time, end_time, duration_ns, status_code, status_message,
-			 attributes, events, resource_attributes, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			 attributes, events, links, resource_attributes, instrumentation_scope, trace_state, flags, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("prepare: %w", err)
@@ -204,12 +204,15 @@ func (s *SQLiteStorage) InsertSpans(ctx context.Context, spans []Span) error {
 		for _, sp := range dateSpans {
 			attrs, _ := json.Marshal(sp.Attributes)
 			events, _ := json.Marshal(sp.Events)
+			links, _ := json.Marshal(sp.Links)
 			resAttrs, _ := json.Marshal(sp.ResourceAttributes)
+			scopeAttrs, _ := json.Marshal(sp.InstrumentationScope)
 
 			_, err := stmt.ExecContext(ctx,
 				sp.TraceID, sp.SpanID, sp.ParentSpanID, sp.ServiceName, sp.SpanName, sp.SpanKind,
 				sp.StartTime, sp.EndTime, sp.DurationNs, sp.StatusCode, sp.StatusMessage,
-				string(attrs), string(events), string(resAttrs), now,
+				string(attrs), string(events), string(links), string(resAttrs), string(scopeAttrs),
+				sp.TraceState, sp.Flags, now,
 			)
 			if err != nil {
 				stmt.Close()
@@ -254,8 +257,9 @@ func (s *SQLiteStorage) InsertMetrics(ctx context.Context, metrics []Metric) err
 		stmt, err := tx.PrepareContext(ctx, `INSERT INTO metrics
 			(service_name, metric_name, metric_type, value,
 			 histogram_count, histogram_sum, histogram_buckets,
-			 attributes, resource_attributes, timestamp, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			 attributes, resource_attributes, timestamp, start_timestamp,
+			 aggregation_temporality, is_monotonic, instrumentation_scope, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("prepare: %w", err)
@@ -266,11 +270,13 @@ func (s *SQLiteStorage) InsertMetrics(ctx context.Context, metrics []Metric) err
 			buckets, _ := json.Marshal(m.HistogramBuckets)
 			attrs, _ := json.Marshal(m.Attributes)
 			resAttrs, _ := json.Marshal(m.ResourceAttributes)
+			scopeAttrs, _ := json.Marshal(m.InstrumentationScope)
 
 			_, err := stmt.ExecContext(ctx,
 				m.ServiceName, m.MetricName, m.MetricType, m.Value,
 				m.HistogramCount, m.HistogramSum, string(buckets),
-				string(attrs), string(resAttrs), m.Timestamp, now,
+				string(attrs), string(resAttrs), m.Timestamp, m.StartTimestamp,
+				m.AggregationTemporality, m.IsMonotonic, string(scopeAttrs), now,
 			)
 			if err != nil {
 				stmt.Close()
@@ -314,8 +320,8 @@ func (s *SQLiteStorage) InsertLogs(ctx context.Context, logs []LogRecord) error 
 
 		stmt, err := tx.PrepareContext(ctx, `INSERT INTO logs
 			(trace_id, span_id, service_name, severity_number, severity_text,
-			 body, attributes, resource_attributes, timestamp, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			 body, attributes, resource_attributes, timestamp, observed_timestamp, instrumentation_scope, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("prepare: %w", err)
@@ -325,10 +331,11 @@ func (s *SQLiteStorage) InsertLogs(ctx context.Context, logs []LogRecord) error 
 		for _, l := range dateLogs {
 			attrs, _ := json.Marshal(l.Attributes)
 			resAttrs, _ := json.Marshal(l.ResourceAttributes)
+			scopeAttrs, _ := json.Marshal(l.InstrumentationScope)
 
 			_, err := stmt.ExecContext(ctx,
 				l.TraceID, l.SpanID, l.ServiceName, l.SeverityNumber, l.SeverityText,
-				l.Body, string(attrs), string(resAttrs), l.Timestamp, now,
+				l.Body, string(attrs), string(resAttrs), l.Timestamp, l.ObservedTimestamp, string(scopeAttrs), now,
 			)
 			if err != nil {
 				stmt.Close()
@@ -620,6 +627,10 @@ func (s *SQLiteStorage) QueryLogs(ctx context.Context, filter LogFilter) ([]LogR
 	if filter.TraceID != "" {
 		where = append(where, "trace_id = ?")
 		args = append(args, filter.TraceID)
+	}
+	if filter.SpanID != "" {
+		where = append(where, "span_id = ?")
+		args = append(args, filter.SpanID)
 	}
 	if filter.SeverityMin > 0 {
 		where = append(where, "severity_number >= ?")
