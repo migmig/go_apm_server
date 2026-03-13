@@ -1,5 +1,6 @@
 import {
   FileTerminal,
+  GitBranch,
   LayoutDashboard,
   ListTree,
   type LucideIcon,
@@ -36,6 +37,7 @@ export const navigationSections: NavigationSection[] = [
       { to: '/', label: '대시보드', icon: LayoutDashboard },
       { to: '/traces', label: '요청 추적', icon: ListTree },
       { to: '/logs', label: '로그 기록', icon: FileTerminal },
+      { to: '/exemplars', label: 'Exemplars', icon: GitBranch },
     ],
   },
   {
@@ -99,6 +101,15 @@ export function getPageMeta(pathname: string): PageMeta {
       section: 'Monitoring',
       description: '실시간 로그와 trace 연결 정보를 확인합니다.',
       breadcrumbs: [{ label: '모니터링' }, { label: '로그 기록' }],
+    };
+  }
+
+  if (pathname === '/exemplars') {
+    return {
+      title: 'Exemplars',
+      section: 'Monitoring',
+      description: '메트릭-트레이스 상관관계를 Exemplar 포인트로 분석합니다.',
+      breadcrumbs: [{ label: '모니터링' }, { label: 'Exemplars' }],
     };
   }
 

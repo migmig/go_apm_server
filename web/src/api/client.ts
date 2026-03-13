@@ -54,6 +54,16 @@ export interface LogRecord {
   attributes: Record<string, any>;
 }
 
+export interface Exemplar {
+  metric_name: string;
+  metric_type: string;
+  timestamp: number;
+  value: number;
+  trace_id: string;
+  span_id: string;
+  attributes: Record<string, any>;
+}
+
 export interface AppConfig {
   server: { api_port: number };
   receiver: { grpc_port: number; http_port: number };
@@ -89,6 +99,8 @@ export const api = {
   getConfig: () => client.get<AppConfig>('/config').then(res => res.data),
   getSystem: () => client.get<SystemInfo>('/system').then(res => res.data),
   getPartitions: () => client.get<{partitions: PartitionInfo[]}>('/partitions').then(res => res.data.partitions),
+  getExemplars: (params: { metric_name?: string; start?: string; end?: string; limit?: number }) =>
+    client.get<{exemplars: Exemplar[]}>('/metrics/exemplars', { params }).then(res => res.data.exemplars),
 };
 
 export default client;

@@ -28,6 +28,7 @@ func NewServer(port int, store storage.Storage, cfg *config.Config, hub *Hub) *h
 	mux.HandleFunc("GET /api/services/{serviceName}", h.HandleGetServiceDetail)
 	mux.HandleFunc("GET /api/traces", h.HandleGetTraces)
 	mux.HandleFunc("GET /api/traces/{traceId}", h.HandleGetTraceDetail)
+	mux.HandleFunc("GET /api/metrics/exemplars", h.HandleGetExemplars)
 	mux.HandleFunc("GET /api/metrics", h.HandleGetMetrics)
 	mux.HandleFunc("GET /api/logs", h.HandleGetLogs)
 	mux.HandleFunc("GET /api/stats", h.HandleGetStats)

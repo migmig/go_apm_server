@@ -89,8 +89,19 @@ func ParseTraces(td ptrace.Traces) []storage.Span {
 	return spans
 }
 
+type ParseMetricsResult struct {
+	Metrics   []storage.Metric
+	Exemplars []storage.Exemplar
+}
+
 func ParseMetrics(md pmetric.Metrics) []storage.Metric {
+	result := ParseMetricsWithExemplars(md)
+	return result.Metrics
+}
+
+func ParseMetricsWithExemplars(md pmetric.Metrics) ParseMetricsResult {
 	var metrics []storage.Metric
+	var exemplars []storage.Exemplar
 
 	rms := md.ResourceMetrics()
 	for i := 0; i < rms.Len(); i++ {
@@ -125,6 +136,7 @@ func ParseMetrics(md pmetric.Metrics) []storage.Metric {
 							StartTimestamp:       int64(dp.StartTimestamp()),
 							InstrumentationScope: scopeMap,
 						})
+						exemplars = append(exemplars, extractNumberExemplars(m.Name(), "gauge", dp.Exemplars())...)
 					}
 				case pmetric.MetricTypeSum:
 					dps := m.Sum().DataPoints()
@@ -143,6 +155,7 @@ func ParseMetrics(md pmetric.Metrics) []storage.Metric {
 							IsMonotonic:            m.Sum().IsMonotonic(),
 							InstrumentationScope:   scopeMap,
 						})
+						exemplars = append(exemplars, extractNumberExemplars(m.Name(), "sum", dp.Exemplars())...)
 					}
 				case pmetric.MetricTypeHistogram:
 					dps := m.Histogram().DataPoints()
@@ -186,6 +199,7 @@ func ParseMetrics(md pmetric.Metrics) []storage.Metric {
 							AggregationTemporality: int32(m.Histogram().AggregationTemporality()),
 							InstrumentationScope:   scopeMap,
 						})
+						exemplars = append(exemplars, extractHistogramExemplars(m.Name(), dp.Exemplars())...)
 					}
 
 				case pmetric.MetricTypeExponentialHistogram:
@@ -205,12 +219,49 @@ func ParseMetrics(md pmetric.Metrics) []storage.Metric {
 							AggregationTemporality: int32(m.ExponentialHistogram().AggregationTemporality()),
 							InstrumentationScope:   scopeMap,
 						})
+						exemplars = append(exemplars, extractExpHistogramExemplars(m.Name(), dp.Exemplars())...)
 					}
 				}
 			}
 		}
 	}
-	return metrics
+	return ParseMetricsResult{Metrics: metrics, Exemplars: exemplars}
+}
+
+func extractNumberExemplars(metricName, metricType string, exs pmetric.ExemplarSlice) []storage.Exemplar {
+	var result []storage.Exemplar
+	for i := 0; i < exs.Len(); i++ {
+		ex := exs.At(i)
+		tid := traceIDToHexOrEmpty(ex.TraceID())
+		sid := spanIDToHexOrEmpty(ex.SpanID())
+		if tid == "" {
+			continue
+		}
+		var val float64
+		if ex.ValueType() == pmetric.ExemplarValueTypeDouble {
+			val = ex.DoubleValue()
+		} else {
+			val = float64(ex.IntValue())
+		}
+		result = append(result, storage.Exemplar{
+			MetricName: metricName,
+			MetricType: metricType,
+			Timestamp:  int64(ex.Timestamp()),
+			Value:      val,
+			TraceID:    tid,
+			SpanID:     sid,
+			Attributes: pcommonMapToMap(ex.FilteredAttributes()),
+		})
+	}
+	return result
+}
+
+func extractHistogramExemplars(metricName string, exs pmetric.ExemplarSlice) []storage.Exemplar {
+	return extractNumberExemplars(metricName, "histogram", exs)
+}
+
+func extractExpHistogramExemplars(metricName string, exs pmetric.ExemplarSlice) []storage.Exemplar {
+	return extractNumberExemplars(metricName, "exponential_histogram", exs)
 }
 
 func ParseLogs(ld plog.Logs) []storage.LogRecord {

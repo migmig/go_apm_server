@@ -68,7 +68,7 @@ func (h *Handler) HandleGetSystem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"version":             "v0.4.0-alpha",
+		"version":             "v0.5.0-alpha",
 		"go_version":          runtime.Version(),
 		"os":                  runtime.GOOS,
 		"arch":                runtime.GOARCH,
@@ -263,6 +263,35 @@ func (h *Handler) HandleGetMetrics(w http.ResponseWriter, r *http.Request) {
 		points = []storage.MetricDataPoint{}
 	}
 	writeJSON(w, http.StatusOK, map[string]any{"data_points": points})
+}
+
+func (h *Handler) HandleGetExemplars(w http.ResponseWriter, r *http.Request) {
+	q := r.URL.Query()
+	filter := storage.ExemplarFilter{
+		MetricName: q.Get("metric_name"),
+		Limit:      intParam(q.Get("limit"), 100),
+	}
+
+	if v := q.Get("start"); v != "" {
+		if ms, err := strconv.ParseInt(v, 10, 64); err == nil {
+			filter.StartTime = time.UnixMilli(ms)
+		}
+	}
+	if v := q.Get("end"); v != "" {
+		if ms, err := strconv.ParseInt(v, 10, 64); err == nil {
+			filter.EndTime = time.UnixMilli(ms)
+		}
+	}
+
+	exemplars, err := h.store.QueryExemplars(r.Context(), filter)
+	if err != nil {
+		writeError(w, http.StatusInternalServerError, err.Error())
+		return
+	}
+	if exemplars == nil {
+		exemplars = []storage.Exemplar{}
+	}
+	writeJSON(w, http.StatusOK, map[string]any{"exemplars": exemplars})
 }
 
 func (h *Handler) HandleGetLogs(w http.ResponseWriter, r *http.Request) {

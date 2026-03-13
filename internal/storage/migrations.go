@@ -77,6 +77,21 @@ CREATE INDEX IF NOT EXISTS idx_logs_trace_id ON logs(trace_id);
 CREATE INDEX IF NOT EXISTS idx_logs_service ON logs(service_name);
 CREATE INDEX IF NOT EXISTS idx_logs_severity ON logs(severity_number);
 CREATE INDEX IF NOT EXISTS idx_logs_timestamp ON logs(timestamp);
+
+CREATE TABLE IF NOT EXISTS metric_exemplars (
+    id              INTEGER PRIMARY KEY AUTOINCREMENT,
+    metric_name     TEXT NOT NULL,
+    metric_type     TEXT NOT NULL DEFAULT 'histogram',
+    timestamp       INTEGER NOT NULL,
+    value           REAL NOT NULL,
+    trace_id        TEXT NOT NULL,
+    span_id         TEXT NOT NULL,
+    attributes      TEXT DEFAULT '{}',
+    created_at      INTEGER NOT NULL
+);
+
+CREATE INDEX IF NOT EXISTS idx_exemplars_metric_time ON metric_exemplars(metric_name, timestamp);
+CREATE INDEX IF NOT EXISTS idx_exemplars_trace_id ON metric_exemplars(trace_id);
 `
 
 func migrate(ctx context.Context, db *sql.DB) error {

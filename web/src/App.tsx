@@ -9,6 +9,7 @@ const TraceDetail = lazy(() => import('./pages/TraceDetail'));
 const ServiceDetail = lazy(() => import('./pages/ServiceDetail'));
 const Logs = lazy(() => import('./pages/Logs'));
 const SettingsPage = lazy(() => import('./pages/Settings'));
+const Exemplars = lazy(() => import('./pages/Exemplars'));
 const NotFoundPage = lazy(() => import('./pages/NotFound'));
 
 function App() {
@@ -22,6 +23,7 @@ function App() {
             <Route path="/traces" element={<Traces />} />
             <Route path="/traces/:traceId" element={<TraceDetail />} />
             <Route path="/logs" element={<Logs />} />
+            <Route path="/exemplars" element={<Exemplars />} />
             <Route path="/settings" element={<SettingsPage />} />
             <Route path="*" element={<NotFoundPage />} />
           </Routes>

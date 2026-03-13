@@ -12,6 +12,7 @@ type Config struct {
 	Receiver  ReceiverConfig  `yaml:"receiver"  json:"receiver"`
 	Processor ProcessorConfig `yaml:"processor" json:"processor"`
 	Storage   StorageConfig   `yaml:"storage"   json:"storage"`
+	Exemplar  ExemplarConfig  `yaml:"exemplar"  json:"exemplar"`
 }
 
 type ServerConfig struct {
@@ -39,6 +40,11 @@ type StorageConfig struct {
 	RetentionDays int    `yaml:"retention_days" json:"retention_days"`
 }
 
+type ExemplarConfig struct {
+	RetentionDays int `yaml:"retention_days" json:"retention_days"`
+	MaxPerMetric  int `yaml:"max_per_metric" json:"max_per_metric"`
+}
+
 func defaults() Config {
 	return Config{
 		Server:   ServerConfig{APIPort: 8080},
@@ -49,7 +55,8 @@ func defaults() Config {
 			QueueSize:     10000,
 			DropOnFull:    true,
 		},
-		Storage: StorageConfig{Path: "./data/apm.db", RetentionDays: 7},
+		Storage:  StorageConfig{Path: "./data/apm.db", RetentionDays: 7},
+		Exemplar: ExemplarConfig{RetentionDays: 7, MaxPerMetric: 100},
 	}
 }
 

@@ -186,13 +186,16 @@ func (r *HTTPReceiver) handleMetrics(w http.ResponseWriter, req *http.Request) {
 		}
 	}
 
-	metrics := processor.ParseMetrics(exportReq.Metrics())
+	result := processor.ParseMetricsWithExemplars(exportReq.Metrics())
 	resp := pmetricotlp.NewExportResponse()
 
-	if err := r.proc.PushMetrics(req.Context(), metrics); err != nil {
+	if err := r.proc.PushMetrics(req.Context(), result.Metrics); err != nil {
 		ps := resp.PartialSuccess()
-		ps.SetRejectedDataPoints(int64(len(metrics)))
+		ps.SetRejectedDataPoints(int64(len(result.Metrics)))
 		ps.SetErrorMessage(err.Error())
+	}
+	if len(result.Exemplars) > 0 {
+		r.proc.PushExemplars(req.Context(), result.Exemplars)
 	}
 
 	sendMetricResponse(w, contentType, resp)

@@ -20,11 +20,13 @@ type Storage interface {
 	InsertSpans(ctx context.Context, spans []Span) error
 	InsertMetrics(ctx context.Context, metrics []Metric) error
 	InsertLogs(ctx context.Context, logs []LogRecord) error
+	InsertExemplars(ctx context.Context, exemplars []Exemplar) error
 
 	QueryTraces(ctx context.Context, filter TraceFilter) ([]TraceSummary, int64, error)
 	GetTraceByID(ctx context.Context, traceID string) ([]Span, error)
 	QueryMetrics(ctx context.Context, filter MetricFilter) ([]MetricDataPoint, error)
 	QueryLogs(ctx context.Context, filter LogFilter) ([]LogRecord, int64, error)
+	QueryExemplars(ctx context.Context, filter ExemplarFilter) ([]Exemplar, error)
 
 	GetServices(ctx context.Context) ([]ServiceInfo, error)
 	GetServiceByName(ctx context.Context, name string) (*ServiceInfo, error)
@@ -32,6 +34,7 @@ type Storage interface {
 
 	GetPartitions() ([]PartitionInfo, error)
 	DeleteOldPartitions(ctx context.Context, retentionDays int) (int64, error)
+	CleanupExemplars(ctx context.Context, retentionDays int) (int64, error)
 	Close() error
 }
 
@@ -1090,6 +1093,148 @@ func (s *SQLiteStorage) DeleteOldPartitions(ctx context.Context, retentionDays i
 			os.Remove(dbPath + "-wal")
 			os.Remove(dbPath + "-shm")
 		}
+	}
+
+	return totalDeleted, nil
+}
+
+func (s *SQLiteStorage) InsertExemplars(ctx context.Context, exemplars []Exemplar) error {
+	if len(exemplars) == 0 {
+		return nil
+	}
+
+	exemplarsByDate := make(map[string][]Exemplar)
+	for _, e := range exemplars {
+		t := time.Unix(0, e.Timestamp)
+		dateStr := t.Format("2006-01-02")
+		exemplarsByDate[dateStr] = append(exemplarsByDate[dateStr], e)
+	}
+
+	for dateStr, dateExemplars := range exemplarsByDate {
+		t, _ := time.Parse("2006-01-02", dateStr)
+		db, err := s.getDB(ctx, t)
+		if err != nil {
+			return err
+		}
+
+		tx, err := db.BeginTx(ctx, nil)
+		if err != nil {
+			return fmt.Errorf("begin tx: %w", err)
+		}
+
+		stmt, err := tx.PrepareContext(ctx, `INSERT INTO metric_exemplars
+			(metric_name, metric_type, timestamp, value, trace_id, span_id, attributes, created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?)`)
+		if err != nil {
+			tx.Rollback()
+			return fmt.Errorf("prepare: %w", err)
+		}
+
+		now := time.Now().UnixNano()
+		for _, e := range dateExemplars {
+			attrs, _ := json.Marshal(e.Attributes)
+			_, err := stmt.ExecContext(ctx,
+				e.MetricName, e.MetricType, e.Timestamp, e.Value,
+				e.TraceID, e.SpanID, string(attrs), now,
+			)
+			if err != nil {
+				stmt.Close()
+				tx.Rollback()
+				return fmt.Errorf("insert exemplar: %w", err)
+			}
+		}
+
+		stmt.Close()
+		if err := tx.Commit(); err != nil {
+			return err
+		}
+	}
+
+	return nil
+}
+
+func (s *SQLiteStorage) QueryExemplars(ctx context.Context, filter ExemplarFilter) ([]Exemplar, error) {
+	if filter.Limit <= 0 {
+		filter.Limit = 100
+	}
+	if filter.Limit > 500 {
+		filter.Limit = 500
+	}
+
+	var where []string
+	var args []any
+
+	if filter.MetricName != "" {
+		where = append(where, "metric_name = ?")
+		args = append(args, filter.MetricName)
+	}
+	if !filter.StartTime.IsZero() {
+		where = append(where, "timestamp >= ?")
+		args = append(args, filter.StartTime.UnixNano())
+	}
+	if !filter.EndTime.IsZero() {
+		where = append(where, "timestamp <= ?")
+		args = append(args, filter.EndTime.UnixNano())
+	}
+
+	whereClause := ""
+	if len(where) > 0 {
+		whereClause = "WHERE " + strings.Join(where, " AND ")
+	}
+
+	var allExemplars []Exemplar
+
+	dbs := s.getAllDBs()
+	for _, db := range dbs {
+		query := fmt.Sprintf(`SELECT metric_name, metric_type, timestamp, value, trace_id, span_id, attributes
+			FROM metric_exemplars %s ORDER BY timestamp DESC LIMIT ?`, whereClause)
+		queryArgs := append(args, filter.Limit)
+
+		rows, err := db.QueryContext(ctx, query, queryArgs...)
+		if err != nil {
+			return nil, fmt.Errorf("query exemplars: %w", err)
+		}
+
+		for rows.Next() {
+			var e Exemplar
+			var attrsJSON string
+			if err := rows.Scan(&e.MetricName, &e.MetricType, &e.Timestamp, &e.Value, &e.TraceID, &e.SpanID, &attrsJSON); err != nil {
+				rows.Close()
+				return nil, fmt.Errorf("scan exemplar: %w", err)
+			}
+			json.Unmarshal([]byte(attrsJSON), &e.Attributes)
+			allExemplars = append(allExemplars, e)
+		}
+		rows.Close()
+	}
+
+	sort.Slice(allExemplars, func(i, j int) bool {
+		return allExemplars[i].Timestamp > allExemplars[j].Timestamp
+	})
+
+	if len(allExemplars) > filter.Limit {
+		allExemplars = allExemplars[:filter.Limit]
+	}
+
+	return allExemplars, nil
+}
+
+func (s *SQLiteStorage) CleanupExemplars(ctx context.Context, retentionDays int) (int64, error) {
+	if retentionDays <= 0 {
+		return 0, nil
+	}
+
+	threshold := time.Now().Add(-time.Duration(retentionDays) * 24 * time.Hour).UnixNano()
+	var totalDeleted int64
+
+	dbs := s.getAllDBs()
+	for _, db := range dbs {
+		result, err := db.ExecContext(ctx, "DELETE FROM metric_exemplars WHERE timestamp < ?", threshold)
+		if err != nil {
+			continue
+		}
+		n, _ := result.RowsAffected()
+		totalDeleted += n
 	}
 
 	return totalDeleted, nil

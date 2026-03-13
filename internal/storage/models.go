@@ -135,6 +135,23 @@ type MetricFilter struct {
 	Limit       int
 }
 
+type Exemplar struct {
+	MetricName string         `json:"metric_name"`
+	MetricType string         `json:"metric_type"` // histogram, exponential_histogram, sum, gauge
+	Timestamp  int64          `json:"timestamp"`
+	Value      float64        `json:"value"`
+	TraceID    string         `json:"trace_id"`
+	SpanID     string         `json:"span_id"`
+	Attributes map[string]any `json:"attributes"`
+}
+
+type ExemplarFilter struct {
+	MetricName string
+	StartTime  time.Time
+	EndTime    time.Time
+	Limit      int
+}
+
 type LogFilter struct {
 	ServiceName string
 	TraceID     string

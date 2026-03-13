@@ -240,8 +240,8 @@ func TestSystemEndpoint(t *testing.T) {
 	}
 	var resp map[string]any
 	json.NewDecoder(w.Body).Decode(&resp)
-	if resp["version"] != "v0.1.0-alpha" {
-		t.Errorf("expected v0.1.0-alpha, got %v", resp["version"])
+	if resp["version"] != "v0.5.0-alpha" {
+		t.Errorf("expected v0.5.0-alpha, got %v", resp["version"])
 	}
 	if resp["go_version"] == nil || resp["go_version"] == "" {
 		t.Error("expected go_version to be present")

@@ -36,8 +36,9 @@ func main() {
 	proc := processor.New(cfg.Processor, store)
 	proc.Start(ctx)
 
-	// Start Retention Worker
+	// Start Retention Workers
 	storage.StartRetentionWorker(ctx, store, cfg.Storage.RetentionDays)
+	storage.StartExemplarRetentionWorker(ctx, store, cfg.Exemplar.RetentionDays)
 
 	grpcReceiver := receiver.NewGRPCReceiver(cfg.Receiver, proc)
 	if err := grpcReceiver.Start(ctx, cfg.Receiver.GRPCPort); err != nil {

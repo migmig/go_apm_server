@@ -95,13 +95,16 @@ type metricServer struct {
 }
 
 func (s *metricServer) Export(ctx context.Context, req pmetricotlp.ExportRequest) (pmetricotlp.ExportResponse, error) {
-	metrics := processor.ParseMetrics(req.Metrics())
+	result := processor.ParseMetricsWithExemplars(req.Metrics())
 	resp := pmetricotlp.NewExportResponse()
-	if err := s.proc.PushMetrics(ctx, metrics); err != nil {
+	if err := s.proc.PushMetrics(ctx, result.Metrics); err != nil {
 		ps := resp.PartialSuccess()
-		ps.SetRejectedDataPoints(int64(len(metrics)))
+		ps.SetRejectedDataPoints(int64(len(result.Metrics)))
 		ps.SetErrorMessage(err.Error())
 		return resp, nil
+	}
+	if len(result.Exemplars) > 0 {
+		s.proc.PushExemplars(ctx, result.Exemplars)
 	}
 	return resp, nil
 }

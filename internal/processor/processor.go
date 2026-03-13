@@ -11,20 +11,22 @@ import (
 )
 
 type FlushEvent struct {
-	Spans   []storage.Span
-	Logs    []storage.LogRecord
-	Metrics []storage.Metric
+	Spans     []storage.Span
+	Logs      []storage.LogRecord
+	Metrics   []storage.Metric
+	Exemplars []storage.Exemplar
 }
 
 type Processor struct {
-	cfg       config.ProcessorConfig
-	store     storage.Storage
-	spansCh   chan storage.Span
-	metricsCh chan storage.Metric
-	logsCh    chan storage.LogRecord
-	stopCh    chan struct{}
-	wg        sync.WaitGroup
-	onFlush   func(FlushEvent)
+	cfg         config.ProcessorConfig
+	store       storage.Storage
+	spansCh     chan storage.Span
+	metricsCh   chan storage.Metric
+	logsCh      chan storage.LogRecord
+	exemplarsCh chan storage.Exemplar
+	stopCh      chan struct{}
+	wg          sync.WaitGroup
+	onFlush     func(FlushEvent)
 }
 
 func (p *Processor) SetOnFlush(fn func(FlushEvent)) {
@@ -33,12 +35,13 @@ func (p *Processor) SetOnFlush(fn func(FlushEvent)) {
 
 func New(cfg config.ProcessorConfig, store storage.Storage) *Processor {
 	return &Processor{
-		cfg:       cfg,
-		store:     store,
-		spansCh:   make(chan storage.Span, cfg.QueueSize),
-		metricsCh: make(chan storage.Metric, cfg.QueueSize),
-		logsCh:    make(chan storage.LogRecord, cfg.QueueSize),
-		stopCh:    make(chan struct{}),
+		cfg:         cfg,
+		store:       store,
+		spansCh:     make(chan storage.Span, cfg.QueueSize),
+		metricsCh:   make(chan storage.Metric, cfg.QueueSize),
+		logsCh:      make(chan storage.LogRecord, cfg.QueueSize),
+		exemplarsCh: make(chan storage.Exemplar, cfg.QueueSize),
+		stopCh:      make(chan struct{}),
 	}
 }
 
@@ -97,6 +100,24 @@ func (p *Processor) PushMetrics(ctx context.Context, metrics []storage.Metric) e
 	return nil
 }
 
+func (p *Processor) PushExemplars(ctx context.Context, exemplars []storage.Exemplar) error {
+	for _, e := range exemplars {
+		if p.cfg.DropOnFull {
+			select {
+			case p.exemplarsCh <- e:
+			default:
+			}
+		} else {
+			select {
+			case p.exemplarsCh <- e:
+			case <-ctx.Done():
+				return ctx.Err()
+			}
+		}
+	}
+	return nil
+}
+
 func (p *Processor) PushLogs(ctx context.Context, logs []storage.LogRecord) error {
 	for _, l := range logs {
 		if p.cfg.DropOnFull {
@@ -115,7 +136,7 @@ func (p *Processor) PushLogs(ctx context.Context, logs []storage.LogRecord) erro
 	return nil
 }
 
-func (p *Processor) drainAndFlush(ctx context.Context, spans *[]storage.Span, metrics *[]storage.Metric, logs *[]storage.LogRecord) {
+func (p *Processor) drainAndFlush(ctx context.Context, spans *[]storage.Span, metrics *[]storage.Metric, logs *[]storage.LogRecord, exemplars *[]storage.Exemplar) {
 	// Drain spans
 loopSpans:
 	for {
@@ -146,6 +167,16 @@ loopLogs:
 			break loopLogs
 		}
 	}
+	// Drain exemplars
+loopExemplars:
+	for {
+		select {
+		case e := <-p.exemplarsCh:
+			*exemplars = append(*exemplars, e)
+		default:
+			break loopExemplars
+		}
+	}
 }
 
 func (p *Processor) batchWorker(ctx context.Context, interval time.Duration) {
@@ -155,11 +186,13 @@ func (p *Processor) batchWorker(ctx context.Context, interval time.Duration) {
 	var spansBatch []storage.Span
 	var metricsBatch []storage.Metric
 	var logsBatch []storage.LogRecord
+	var exemplarsBatch []storage.Exemplar
 
 	flush := func() {
 		var flushedSpans []storage.Span
 		var flushedLogs []storage.LogRecord
 		var flushedMetrics []storage.Metric
+		var flushedExemplars []storage.Exemplar
 
 		if len(spansBatch) > 0 {
 			flushedSpans = make([]storage.Span, len(spansBatch))
@@ -185,12 +218,21 @@ func (p *Processor) batchWorker(ctx context.Context, interval time.Duration) {
 			}
 			logsBatch = logsBatch[:0]
 		}
+		if len(exemplarsBatch) > 0 {
+			flushedExemplars = make([]storage.Exemplar, len(exemplarsBatch))
+			copy(flushedExemplars, exemplarsBatch)
+			if err := p.store.InsertExemplars(ctx, exemplarsBatch); err != nil {
+				fmt.Printf("failed to flush exemplars: %v\n", err)
+			}
+			exemplarsBatch = exemplarsBatch[:0]
+		}
 
-		if p.onFlush != nil && (len(flushedSpans) > 0 || len(flushedLogs) > 0 || len(flushedMetrics) > 0) {
+		if p.onFlush != nil && (len(flushedSpans) > 0 || len(flushedLogs) > 0 || len(flushedMetrics) > 0 || len(flushedExemplars) > 0) {
 			go p.onFlush(FlushEvent{
-				Spans:   flushedSpans,
-				Logs:    flushedLogs,
-				Metrics: flushedMetrics,
+				Spans:     flushedSpans,
+				Logs:      flushedLogs,
+				Metrics:   flushedMetrics,
+				Exemplars: flushedExemplars,
 			})
 		}
 	}
@@ -198,11 +240,11 @@ func (p *Processor) batchWorker(ctx context.Context, interval time.Duration) {
 	for {
 		select {
 		case <-p.stopCh:
-			p.drainAndFlush(ctx, &spansBatch, &metricsBatch, &logsBatch)
+			p.drainAndFlush(ctx, &spansBatch, &metricsBatch, &logsBatch, &exemplarsBatch)
 			flush()
 			return
 		case <-ctx.Done():
-			p.drainAndFlush(ctx, &spansBatch, &metricsBatch, &logsBatch)
+			p.drainAndFlush(ctx, &spansBatch, &metricsBatch, &logsBatch, &exemplarsBatch)
 			flush()
 			return
 		case sp := <-p.spansCh:
@@ -218,6 +260,11 @@ func (p *Processor) batchWorker(ctx context.Context, interval time.Duration) {
 		case l := <-p.logsCh:
 			logsBatch = append(logsBatch, l)
 			if len(logsBatch) >= p.cfg.BatchSize {
+				flush()
+			}
+		case e := <-p.exemplarsCh:
+			exemplarsBatch = append(exemplarsBatch, e)
+			if len(exemplarsBatch) >= p.cfg.BatchSize {
 				flush()
 			}
 		case <-ticker.C:
