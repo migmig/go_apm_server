@@ -7,6 +7,7 @@ import (
 	"net/http/httptest"
 	"path/filepath"
 	"testing"
+	"time"
 
 	"github.com/migmig/go_apm_server/internal/config"
 	"github.com/migmig/go_apm_server/internal/storage"
@@ -36,12 +37,13 @@ func setupTestServer(t *testing.T) (*Handler, *storage.SQLiteStorage) {
 	t.Cleanup(func() { db.Close() })
 
 	// Seed data
+	now := time.Now().UnixNano()
 	db.InsertSpans(context.Background(), []storage.Span{
-		{TraceID: "abc123", SpanID: "span1", ParentSpanID: "", ServiceName: "test-svc", SpanName: "GET /api", SpanKind: 2, StartTime: 1000000000, EndTime: 1100000000, DurationNs: 100000000, StatusCode: 1, Attributes: map[string]any{"http.method": "GET"}, ResourceAttributes: map[string]any{"service.name": "test-svc"}},
-		{TraceID: "abc123", SpanID: "span2", ParentSpanID: "span1", ServiceName: "test-svc", SpanName: "DB query", SpanKind: 3, StartTime: 1010000000, EndTime: 1080000000, DurationNs: 70000000, StatusCode: 1, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
+		{TraceID: "abc123", SpanID: "span1", ParentSpanID: "", ServiceName: "test-svc", SpanName: "GET /api", SpanKind: 2, StartTime: now - 1000, EndTime: now, DurationNs: 100000000, StatusCode: 1, Attributes: map[string]any{"http.method": "GET"}, ResourceAttributes: map[string]any{"service.name": "test-svc"}},
+		{TraceID: "abc123", SpanID: "span2", ParentSpanID: "span1", ServiceName: "test-svc", SpanName: "DB query", SpanKind: 3, StartTime: now - 500, EndTime: now, DurationNs: 70000000, StatusCode: 1, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
 	})
 	db.InsertLogs(context.Background(), []storage.LogRecord{
-		{ServiceName: "test-svc", SeverityNumber: 9, SeverityText: "INFO", Body: "test log", Timestamp: 1000000000, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
+		{ServiceName: "test-svc", SeverityNumber: 9, SeverityText: "INFO", Body: "test log", Timestamp: now - 1000, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
 	})
 
 	return NewHandler(db, testConfig(), NewHub(db)), db
@@ -248,5 +250,40 @@ func TestSystemEndpoint(t *testing.T) {
 	}
 	if resp["uptime_seconds"] == nil {
 		t.Error("expected uptime_seconds to be present")
+	}
+}
+
+func TestExemplarsEndpoint(t *testing.T) {
+	h, db := setupTestServer(t)
+	db.InsertExemplars(context.Background(), []storage.Exemplar{
+		{MetricName: "m1", MetricType: "gauge", Timestamp: 1000, Value: 1.0, TraceID: "t1", SpanID: "s1"},
+		{MetricName: "m2", MetricType: "histogram", Timestamp: 2000, Value: 2.0, TraceID: "t2", SpanID: "s2"},
+	})
+
+	// 1. All
+	req := httptest.NewRequest("GET", "/api/metrics/exemplars", nil)
+	w := httptest.NewRecorder()
+	h.HandleGetExemplars(w, req)
+
+	if w.Code != 200 {
+		t.Errorf("expected 200, got %d", w.Code)
+	}
+	var resp map[string][]storage.Exemplar
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp["exemplars"]) != 2 {
+		t.Errorf("expected 2 exemplars, got %d", len(resp["exemplars"]))
+	}
+
+	// 2. Filtered
+	req = httptest.NewRequest("GET", "/api/metrics/exemplars?metric_name=m1", nil)
+	w = httptest.NewRecorder()
+	h.HandleGetExemplars(w, req)
+
+	json.NewDecoder(w.Body).Decode(&resp)
+	if len(resp["exemplars"]) != 1 {
+		t.Errorf("expected 1 exemplar for m1, got %d", len(resp["exemplars"]))
+	}
+	if resp["exemplars"][0].MetricName != "m1" {
+		t.Errorf("expected m1, got %s", resp["exemplars"][0].MetricName)
 	}
 }

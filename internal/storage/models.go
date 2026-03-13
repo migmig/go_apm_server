@@ -21,6 +21,13 @@ type Span struct {
 	InstrumentationScope map[string]any
 	TraceState           string
 	Flags                int32
+	HTTPMethod           string
+	HTTPRoute            string
+	HTTPStatusCode       *int64
+	DBSystem             string
+	DBOperation          string
+	RPCSystem            string
+	MessagingSystem      string
 }
 
 type SpanLink struct {
@@ -117,14 +124,21 @@ type PartitionInfo struct {
 }
 
 type TraceFilter struct {
-	ServiceName string
-	MinDuration time.Duration
-	MaxDuration time.Duration
-	StatusCode  *int32
-	StartTime   time.Time
-	EndTime     time.Time
-	Limit       int
-	Offset      int
+	ServiceName     string
+	MinDuration     time.Duration
+	MaxDuration     time.Duration
+	StatusCode      *int32
+	StartTime       time.Time
+	EndTime         time.Time
+	HTTPMethod      string
+	HTTPRoute       string
+	HTTPStatusCode  *int64
+	DBSystem        string
+	DBOperation     string
+	RPCSystem       string
+	MessagingSystem string
+	Limit           int
+	Offset          int
 }
 
 type MetricFilter struct {

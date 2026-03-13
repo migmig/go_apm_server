@@ -11,6 +11,7 @@ import (
 	"time"
 
 	"github.com/migmig/go_apm_server/internal/config"
+	"github.com/migmig/go_apm_server/internal/exporter"
 	"github.com/migmig/go_apm_server/internal/storage"
 	"nhooyr.io/websocket"
 )
@@ -20,10 +21,11 @@ type Handler struct {
 	cfg       *config.Config
 	startTime time.Time
 	hub       *Hub
+	exporter  *exporter.Forwarder
 }
 
-func NewHandler(store storage.Storage, cfg *config.Config, hub *Hub) *Handler {
-	return &Handler{store: store, cfg: cfg, startTime: time.Now(), hub: hub}
+func NewHandler(store storage.Storage, cfg *config.Config, hub *Hub, fwd *exporter.Forwarder) *Handler {
+	return &Handler{store: store, cfg: cfg, startTime: time.Now(), hub: hub, exporter: fwd}
 }
 
 func (h *Handler) HandleWebSocket(w http.ResponseWriter, r *http.Request) {
@@ -68,7 +70,7 @@ func (h *Handler) HandleGetSystem(w http.ResponseWriter, r *http.Request) {
 	}
 
 	writeJSON(w, http.StatusOK, map[string]any{
-		"version":             "v0.5.0-alpha",
+		"version":             "v0.7.0-alpha",
 		"go_version":          runtime.Version(),
 		"os":                  runtime.GOOS,
 		"arch":                runtime.GOARCH,
@@ -164,6 +166,29 @@ func (h *Handler) HandleGetTraces(w http.ResponseWriter, r *http.Request) {
 		if ms, err := strconv.ParseInt(v, 10, 64); err == nil {
 			filter.MinDuration = time.Duration(ms) * time.Millisecond
 		}
+	}
+	if v := q.Get("http_method"); v != "" {
+		filter.HTTPMethod = v
+	}
+	if v := q.Get("http_route"); v != "" {
+		filter.HTTPRoute = v
+	}
+	if v := q.Get("http_status_code"); v != "" {
+		if code, err := strconv.ParseInt(v, 10, 64); err == nil {
+			filter.HTTPStatusCode = &code
+		}
+	}
+	if v := q.Get("db_system"); v != "" {
+		filter.DBSystem = v
+	}
+	if v := q.Get("db_operation"); v != "" {
+		filter.DBOperation = v
+	}
+	if v := q.Get("rpc_system"); v != "" {
+		filter.RPCSystem = v
+	}
+	if v := q.Get("messaging_system"); v != "" {
+		filter.MessagingSystem = v
 	}
 
 	traces, total, err := h.store.QueryTraces(r.Context(), filter)
@@ -370,6 +395,14 @@ func (h *Handler) HandleGetStats(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 	writeJSON(w, http.StatusOK, stats)
+}
+
+func (h *Handler) HandleGetExporterStatus(w http.ResponseWriter, r *http.Request) {
+	if h.exporter == nil {
+		writeJSON(w, http.StatusOK, map[string]any{"endpoints": []any{}})
+		return
+	}
+	writeJSON(w, http.StatusOK, h.exporter.GetStatus())
 }
 
 // --- helpers ---

@@ -35,6 +35,7 @@ type Storage interface {
 	GetPartitions() ([]PartitionInfo, error)
 	DeleteOldPartitions(ctx context.Context, retentionDays int) (int64, error)
 	CleanupExemplars(ctx context.Context, retentionDays int) (int64, error)
+	BackfillSpanSemanticColumns(ctx context.Context) error
 	Close() error
 }
 
@@ -196,8 +197,10 @@ func (s *SQLiteStorage) InsertSpans(ctx context.Context, spans []Span) error {
 		stmt, err := tx.PrepareContext(ctx, `INSERT INTO spans
 			(trace_id, span_id, parent_span_id, service_name, span_name, span_kind,
 			 start_time, end_time, duration_ns, status_code, status_message,
-			 attributes, events, links, resource_attributes, instrumentation_scope, trace_state, flags, created_at)
-			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
+			 attributes, events, links, resource_attributes, instrumentation_scope, trace_state, flags,
+			 http_method, http_route, http_status_code, db_system, db_operation, rpc_system, messaging_system,
+			 created_at)
+			VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`)
 		if err != nil {
 			tx.Rollback()
 			return fmt.Errorf("prepare: %w", err)
@@ -211,11 +214,18 @@ func (s *SQLiteStorage) InsertSpans(ctx context.Context, spans []Span) error {
 			resAttrs, _ := json.Marshal(sp.ResourceAttributes)
 			scopeAttrs, _ := json.Marshal(sp.InstrumentationScope)
 
+			var httpStatus any
+			if sp.HTTPStatusCode != nil {
+				httpStatus = *sp.HTTPStatusCode
+			}
+
 			_, err := stmt.ExecContext(ctx,
 				sp.TraceID, sp.SpanID, sp.ParentSpanID, sp.ServiceName, sp.SpanName, sp.SpanKind,
 				sp.StartTime, sp.EndTime, sp.DurationNs, sp.StatusCode, sp.StatusMessage,
 				string(attrs), string(events), string(links), string(resAttrs), string(scopeAttrs),
-				sp.TraceState, sp.Flags, now,
+				sp.TraceState, sp.Flags,
+				sp.HTTPMethod, sp.HTTPRoute, httpStatus, sp.DBSystem, sp.DBOperation, sp.RPCSystem, sp.MessagingSystem,
+				now,
 			)
 			if err != nil {
 				stmt.Close()
@@ -395,6 +405,34 @@ func (s *SQLiteStorage) QueryTraces(ctx context.Context, filter TraceFilter) ([]
 	if filter.StatusCode != nil {
 		where = append(where, "status_code = ?")
 		args = append(args, *filter.StatusCode)
+	}
+	if filter.HTTPMethod != "" {
+		where = append(where, "http_method = ?")
+		args = append(args, filter.HTTPMethod)
+	}
+	if filter.HTTPRoute != "" {
+		where = append(where, "http_route = ?")
+		args = append(args, filter.HTTPRoute)
+	}
+	if filter.HTTPStatusCode != nil {
+		where = append(where, "http_status_code = ?")
+		args = append(args, *filter.HTTPStatusCode)
+	}
+	if filter.DBSystem != "" {
+		where = append(where, "db_system = ?")
+		args = append(args, filter.DBSystem)
+	}
+	if filter.DBOperation != "" {
+		where = append(where, "db_operation = ?")
+		args = append(args, filter.DBOperation)
+	}
+	if filter.RPCSystem != "" {
+		where = append(where, "rpc_system = ?")
+		args = append(args, filter.RPCSystem)
+	}
+	if filter.MessagingSystem != "" {
+		where = append(where, "messaging_system = ?")
+		args = append(args, filter.MessagingSystem)
 	}
 
 	whereClause := ""
@@ -1238,4 +1276,66 @@ func (s *SQLiteStorage) CleanupExemplars(ctx context.Context, retentionDays int)
 	}
 
 	return totalDeleted, nil
+}
+
+func (s *SQLiteStorage) BackfillSpanSemanticColumns(ctx context.Context) error {
+	dbs := s.getAllDBs()
+	batchSize := 1000
+
+	for i, db := range dbs {
+		// Count how many need backfilling
+		var total int
+		err := db.QueryRowContext(ctx, "SELECT COUNT(*) FROM spans WHERE http_method IS NULL AND db_system IS NULL").Scan(&total)
+		if err != nil {
+			fmt.Printf("[db%d] failed to count spans for backfill: %v\n", i, err)
+			continue
+		}
+
+		if total == 0 {
+			continue
+		}
+
+		fmt.Printf("[db%d] Starting backfill for %d spans...\n", i, total)
+
+		processed := 0
+		for {
+			result, err := db.ExecContext(ctx, `
+				UPDATE spans 
+				SET 
+					http_method = json_extract(attributes, '$.http.method'),
+					http_route = json_extract(attributes, '$.http.route'),
+					http_status_code = json_extract(attributes, '$.http.status_code'),
+					db_system = json_extract(attributes, '$.db.system'),
+					db_operation = json_extract(attributes, '$.db.operation'),
+					rpc_system = json_extract(attributes, '$.rpc.system'),
+					messaging_system = json_extract(attributes, '$.messaging.system')
+				WHERE id IN (
+					SELECT id FROM spans 
+					WHERE http_method IS NULL AND db_system IS NULL
+					LIMIT ?
+				)`, batchSize)
+
+			if err != nil {
+				return fmt.Errorf("[db%d] backfill update error: %w", i, err)
+			}
+
+			rows, _ := result.RowsAffected()
+			if rows == 0 {
+				break
+			}
+
+			processed += int(rows)
+			fmt.Printf("[db%d] Backfill progress: %d / %d\n", i, processed, total)
+
+			if processed >= total {
+				break
+			}
+
+			// Give some breathing room for other operations
+			time.Sleep(10 * time.Millisecond)
+		}
+		fmt.Printf("[db%d] Backfill completed.\n", i)
+	}
+
+	return nil
 }

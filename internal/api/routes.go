@@ -9,13 +9,14 @@ import (
 	"time"
 
 	"github.com/migmig/go_apm_server/internal/config"
+	"github.com/migmig/go_apm_server/internal/exporter"
 	"github.com/migmig/go_apm_server/internal/storage"
 	"github.com/migmig/go_apm_server/web"
 	"github.com/prometheus/client_golang/prometheus/promhttp"
 )
 
-func NewServer(port int, store storage.Storage, cfg *config.Config, hub *Hub) *http.Server {
-	h := NewHandler(store, cfg, hub)
+func NewServer(port int, store storage.Storage, cfg *config.Config, hub *Hub, fwd *exporter.Forwarder) *http.Server {
+	h := NewHandler(store, cfg, hub, fwd)
 
 	mux := http.NewServeMux()
 	mux.HandleFunc("GET /ws", h.HandleWebSocket)
@@ -32,6 +33,7 @@ func NewServer(port int, store storage.Storage, cfg *config.Config, hub *Hub) *h
 	mux.HandleFunc("GET /api/metrics", h.HandleGetMetrics)
 	mux.HandleFunc("GET /api/logs", h.HandleGetLogs)
 	mux.HandleFunc("GET /api/stats", h.HandleGetStats)
+	mux.HandleFunc("GET /api/exporter/status", h.HandleGetExporterStatus)
 
 	// Serve embedded static files from "dist"
 	staticFS, err := fs.Sub(web.StaticFS, "dist")

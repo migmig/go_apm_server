@@ -13,6 +13,7 @@ type Config struct {
 	Processor ProcessorConfig `yaml:"processor" json:"processor"`
 	Storage   StorageConfig   `yaml:"storage"   json:"storage"`
 	Exemplar  ExemplarConfig  `yaml:"exemplar"  json:"exemplar"`
+	Exporter  ExporterConfig  `yaml:"exporter"  json:"exporter"`
 }
 
 type ServerConfig struct {
@@ -43,6 +44,43 @@ type StorageConfig struct {
 type ExemplarConfig struct {
 	RetentionDays int `yaml:"retention_days" json:"retention_days"`
 	MaxPerMetric  int `yaml:"max_per_metric" json:"max_per_metric"`
+}
+
+type ExporterConfig struct {
+	Endpoints []ExporterEndpoint `yaml:"endpoints" json:"endpoints"`
+}
+
+type ExporterEndpoint struct {
+	Name        string            `yaml:"name"         json:"name"`
+	URL         string            `yaml:"url"          json:"url"`
+	Protocol    string            `yaml:"protocol"     json:"protocol"`     // "grpc" or "http"
+	SignalTypes []string          `yaml:"signal_types" json:"signal_types"` // ["traces", "metrics", "logs"]
+	Headers     map[string]string `yaml:"headers"      json:"headers"`
+	Timeout     string            `yaml:"timeout"      json:"timeout"`
+	Retry       RetryConfig       `yaml:"retry"        json:"retry"`
+	TLS         TLSConfig         `yaml:"tls"          json:"tls"`
+	DLQ         DLQConfig         `yaml:"dlq"          json:"dlq"`
+}
+
+type RetryConfig struct {
+	Enabled         bool   `yaml:"enabled"           json:"enabled"`
+	MaxAttempts     int    `yaml:"max_attempts"      json:"max_attempts"`
+	InitialInterval string `yaml:"initial_interval" json:"initial_interval"`
+}
+
+type TLSConfig struct {
+	Insecure   bool   `yaml:"insecure"    json:"insecure"`
+	CertPath   string `yaml:"cert_path"   json:"cert_path"`
+	KeyPath    string `yaml:"key_path"    json:"key_path"`
+	CAPath     string `yaml:"ca_path"     json:"ca_path"`
+	SkipVerify bool   `yaml:"skip_verify" json:"skip_verify"`
+}
+
+type DLQConfig struct {
+	Enabled       bool   `yaml:"enabled"         json:"enabled"`
+	Path          string `yaml:"path"            json:"path"`
+	MaxSizeMB     int    `yaml:"max_size_mb"     json:"max_size_mb"`
+	RetryInterval string `yaml:"retry_interval"  json:"retry_interval"`
 }
 
 func defaults() Config {

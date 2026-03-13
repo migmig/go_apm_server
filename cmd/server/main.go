@@ -11,6 +11,7 @@ import (
 
 	"github.com/migmig/go_apm_server/internal/api"
 	"github.com/migmig/go_apm_server/internal/config"
+	"github.com/migmig/go_apm_server/internal/exporter"
 	"github.com/migmig/go_apm_server/internal/processor"
 	"github.com/migmig/go_apm_server/internal/receiver"
 	"github.com/migmig/go_apm_server/internal/storage"
@@ -55,11 +56,17 @@ func main() {
 	hub := api.NewHub(store)
 	go hub.Run(ctx)
 
+	fwd := exporter.NewForwarder(cfg.Exporter)
+	fwd.Start()
+
 	proc.SetOnFlush(func(event processor.FlushEvent) {
 		hub.BroadcastFlush(ctx, event.Spans, event.Logs)
+		fwd.ForwardSpans(event.Spans)
+		fwd.ForwardMetrics(event.Metrics)
+		fwd.ForwardLogs(event.Logs)
 	})
 
-	apiServer := api.NewServer(cfg.Server.APIPort, store, cfg, hub)
+	apiServer := api.NewServer(cfg.Server.APIPort, store, cfg, hub, fwd)
 	go func() {
 		if err := apiServer.ListenAndServe(); err != nil && err != http.ErrServerClosed {
 			log.Fatalf("api server error: %v", err)
@@ -78,7 +85,10 @@ func main() {
 	httpReceiver.Stop(context.Background())
 	grpcReceiver.Stop()
 
-	// 2. Processor에 쌓여 있는 남은 메모리 버퍼 데이터를 DB로 Flush
+	// 2. Exporter Forwarder 닫기 (남은 큐 전송 시도)
+	fwd.Stop()
+
+	// 3. Processor에 쌓여 있는 남은 메모리 버퍼 데이터를 DB로 Flush
 	proc.Stop()
 
 	// 3. Storage(SQLite) 커넥션 안전하게 닫기

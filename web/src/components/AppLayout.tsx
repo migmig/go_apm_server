@@ -104,7 +104,7 @@ export default function AppLayout({ children }: { children: React.ReactNode }) {
                       {isPaused ? '수신 재개' : '수신 동결'}
                     </button>
                     <div className="hidden sm:block shrink-0 rounded-full border border-slate-800 bg-slate-900/80 px-3 py-1.5 text-xs font-medium text-slate-400">
-                      v0.5.0-alpha
+                      v0.7.0-alpha
                     </div>
                   </div>
                 </div>

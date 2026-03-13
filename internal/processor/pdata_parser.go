@@ -4,6 +4,7 @@ import (
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
+	"strconv"
 
 	"go.opentelemetry.io/collector/pdata/pcommon"
 	"go.opentelemetry.io/collector/pdata/plog"
@@ -36,6 +37,44 @@ func ParseTraces(td ptrace.Traces) []storage.Span {
 				sp := ils.Spans().At(k)
 
 				attrs := pcommonMapToMap(sp.Attributes())
+
+				// Extract and remove semantic conventions from attributes
+				var (
+					httpMethod, httpRoute, dbSystem, dbOp, rpcSystem, msgSystem string
+					httpStatusCode                                              *int64
+				)
+
+				if v, ok := attrs["http.method"]; ok {
+					httpMethod = fmt.Sprint(v)
+					delete(attrs, "http.method")
+				}
+				if v, ok := attrs["http.route"]; ok {
+					httpRoute = fmt.Sprint(v)
+					delete(attrs, "http.route")
+				}
+				if v, ok := attrs["http.status_code"]; ok {
+					if n, err := strconv.ParseInt(fmt.Sprint(v), 10, 64); err == nil {
+						httpStatusCode = &n
+					}
+					delete(attrs, "http.status_code")
+				}
+				if v, ok := attrs["db.system"]; ok {
+					dbSystem = fmt.Sprint(v)
+					delete(attrs, "db.system")
+				}
+				if v, ok := attrs["db.operation"]; ok {
+					dbOp = fmt.Sprint(v)
+					delete(attrs, "db.operation")
+				}
+				if v, ok := attrs["rpc.system"]; ok {
+					rpcSystem = fmt.Sprint(v)
+					delete(attrs, "rpc.system")
+				}
+				if v, ok := attrs["messaging.system"]; ok {
+					msgSystem = fmt.Sprint(v)
+					delete(attrs, "messaging.system")
+				}
+
 				events := make([]storage.SpanEvent, 0, sp.Events().Len())
 				for l := 0; l < sp.Events().Len(); l++ {
 					e := sp.Events().At(l)
@@ -81,6 +120,13 @@ func ParseTraces(td ptrace.Traces) []storage.Span {
 					InstrumentationScope: scopeMap,
 					TraceState:           sp.TraceState().AsRaw(),
 					Flags:                int32(sp.Flags()),
+					HTTPMethod:           httpMethod,
+					HTTPRoute:            httpRoute,
+					HTTPStatusCode:       httpStatusCode,
+					DBSystem:             dbSystem,
+					DBOperation:          dbOp,
+					RPCSystem:            rpcSystem,
+					MessagingSystem:      msgSystem,
 				}
 				spans = append(spans, s)
 			}
@@ -356,4 +402,242 @@ func getValue(dp pmetric.NumberDataPoint) float64 {
 		return dp.DoubleValue()
 	}
 	return float64(dp.IntValue())
+}
+
+func ToOTLPTraces(spans []storage.Span) ptrace.Traces {
+	td := ptrace.NewTraces()
+	if len(spans) == 0 {
+		return td
+	}
+
+	// Group spans by service name
+	serviceSpans := make(map[string][]storage.Span)
+	for _, s := range spans {
+		serviceSpans[s.ServiceName] = append(serviceSpans[s.ServiceName], s)
+	}
+
+	for svc, spans := range serviceSpans {
+		rs := td.ResourceSpans().AppendEmpty()
+		rs.Resource().Attributes().PutStr("service.name", svc)
+
+		// Map back resource attributes if present in first span
+		if len(spans) > 0 {
+			mapToPCommonMap(spans[0].ResourceAttributes, rs.Resource().Attributes())
+		}
+
+		ss := rs.ScopeSpans().AppendEmpty()
+		for _, s := range spans {
+			sp := ss.Spans().AppendEmpty()
+			sp.SetTraceID(hexToTraceID(s.TraceID))
+			sp.SetSpanID(hexToSpanID(s.SpanID))
+			sp.SetParentSpanID(hexToSpanID(s.ParentSpanID))
+			sp.SetName(s.SpanName)
+			sp.SetKind(ptrace.SpanKind(s.SpanKind))
+			sp.SetStartTimestamp(pcommon.Timestamp(s.StartTime))
+			sp.SetEndTimestamp(pcommon.Timestamp(s.EndTime))
+			sp.Status().SetCode(ptrace.StatusCode(s.StatusCode))
+			sp.Status().SetMessage(s.StatusMessage)
+			sp.TraceState().FromRaw(s.TraceState)
+			sp.SetFlags(uint32(s.Flags))
+
+			attrs := sp.Attributes()
+			mapToPCommonMap(s.Attributes, attrs)
+
+			// Restore semantic conventions
+			if s.HTTPMethod != "" {
+				attrs.PutStr("http.method", s.HTTPMethod)
+			}
+			if s.HTTPRoute != "" {
+				attrs.PutStr("http.route", s.HTTPRoute)
+			}
+			if s.HTTPStatusCode != nil {
+				attrs.PutInt("http.status_code", *s.HTTPStatusCode)
+			}
+			if s.DBSystem != "" {
+				attrs.PutStr("db.system", s.DBSystem)
+			}
+			if s.DBOperation != "" {
+				attrs.PutStr("db.operation", s.DBOperation)
+			}
+			if s.RPCSystem != "" {
+				attrs.PutStr("rpc.system", s.RPCSystem)
+			}
+			if s.MessagingSystem != "" {
+				attrs.PutStr("messaging.system", s.MessagingSystem)
+			}
+
+			for _, e := range s.Events {
+				ev := sp.Events().AppendEmpty()
+				ev.SetName(e.Name)
+				ev.SetTimestamp(pcommon.Timestamp(e.Timestamp))
+				mapToPCommonMap(e.Attributes, ev.Attributes())
+			}
+
+			for _, l := range s.Links {
+				link := sp.Links().AppendEmpty()
+				link.SetTraceID(hexToTraceID(l.TraceID))
+				link.SetSpanID(hexToSpanID(l.SpanID))
+				link.TraceState().FromRaw(l.TraceState)
+				link.SetFlags(uint32(l.Flags))
+				mapToPCommonMap(l.Attributes, link.Attributes())
+			}
+		}
+	}
+	return td
+}
+
+func ToOTLPMetrics(metrics []storage.Metric) pmetric.Metrics {
+	md := pmetric.NewMetrics()
+	if len(metrics) == 0 {
+		return md
+	}
+
+	serviceMetrics := make(map[string][]storage.Metric)
+	for _, m := range metrics {
+		serviceMetrics[m.ServiceName] = append(serviceMetrics[m.ServiceName], m)
+	}
+
+	for svc, ms := range serviceMetrics {
+		rm := md.ResourceMetrics().AppendEmpty()
+		rm.Resource().Attributes().PutStr("service.name", svc)
+		if len(ms) > 0 {
+			mapToPCommonMap(ms[0].ResourceAttributes, rm.Resource().Attributes())
+		}
+
+		sm := rm.ScopeMetrics().AppendEmpty()
+		for _, m := range ms {
+			met := sm.Metrics().AppendEmpty()
+			met.SetName(m.MetricName)
+
+			switch m.MetricType {
+			case int32(pmetric.MetricTypeGauge):
+				met.SetEmptyGauge()
+				dp := met.Gauge().DataPoints().AppendEmpty()
+				dp.SetDoubleValue(m.Value)
+				dp.SetTimestamp(pcommon.Timestamp(m.Timestamp))
+				dp.SetStartTimestamp(pcommon.Timestamp(m.StartTimestamp))
+				mapToPCommonMap(m.Attributes, dp.Attributes())
+			case int32(pmetric.MetricTypeSum):
+				met.SetEmptySum()
+				met.Sum().SetIsMonotonic(m.IsMonotonic)
+				met.Sum().SetAggregationTemporality(pmetric.AggregationTemporality(m.AggregationTemporality))
+				dp := met.Sum().DataPoints().AppendEmpty()
+				dp.SetDoubleValue(m.Value)
+				dp.SetTimestamp(pcommon.Timestamp(m.Timestamp))
+				dp.SetStartTimestamp(pcommon.Timestamp(m.StartTimestamp))
+				mapToPCommonMap(m.Attributes, dp.Attributes())
+			case int32(pmetric.MetricTypeHistogram):
+				met.SetEmptyHistogram()
+				met.Histogram().SetAggregationTemporality(pmetric.AggregationTemporality(m.AggregationTemporality))
+				dp := met.Histogram().DataPoints().AppendEmpty()
+				dp.SetCount(uint64(m.HistogramCount))
+				dp.SetSum(m.HistogramSum)
+				dp.SetTimestamp(pcommon.Timestamp(m.Timestamp))
+				dp.SetStartTimestamp(pcommon.Timestamp(m.StartTimestamp))
+				mapToPCommonMap(m.Attributes, dp.Attributes())
+
+				var bounds []float64
+				var counts []uint64
+				for _, b := range m.HistogramBuckets {
+					if b.UpperBound < 1e99 {
+						bounds = append(bounds, b.UpperBound)
+					}
+					counts = append(counts, b.Count)
+				}
+				dp.ExplicitBounds().FromRaw(bounds)
+				dp.BucketCounts().FromRaw(counts)
+			}
+		}
+	}
+	return md
+}
+
+func ToOTLPLogs(logs []storage.LogRecord) plog.Logs {
+	ld := plog.NewLogs()
+	if len(logs) == 0 {
+		return ld
+	}
+
+	serviceLogs := make(map[string][]storage.LogRecord)
+	for _, l := range logs {
+		serviceLogs[l.ServiceName] = append(serviceLogs[l.ServiceName], l)
+	}
+
+	for svc, ls := range serviceLogs {
+		rl := ld.ResourceLogs().AppendEmpty()
+		rl.Resource().Attributes().PutStr("service.name", svc)
+		if len(ls) > 0 {
+			mapToPCommonMap(ls[0].ResourceAttributes, rl.Resource().Attributes())
+		}
+
+		sl := rl.ScopeLogs().AppendEmpty()
+		for _, l := range ls {
+			lr := sl.LogRecords().AppendEmpty()
+			lr.SetTimestamp(pcommon.Timestamp(l.Timestamp))
+			lr.SetObservedTimestamp(pcommon.Timestamp(l.ObservedTimestamp))
+			lr.SetSeverityNumber(plog.SeverityNumber(l.SeverityNumber))
+			lr.SetSeverityText(l.SeverityText)
+			lr.Body().SetStr(l.Body)
+			lr.SetTraceID(hexToTraceID(l.TraceID))
+			lr.SetSpanID(hexToSpanID(l.SpanID))
+			mapToPCommonMap(l.Attributes, lr.Attributes())
+		}
+	}
+	return ld
+}
+
+func mapToPCommonMap(src map[string]any, dst pcommon.Map) {
+	for k, v := range src {
+		switch val := v.(type) {
+		case string:
+			dst.PutStr(k, val)
+		case int64:
+			dst.PutInt(k, val)
+		case float64:
+			dst.PutDouble(k, val)
+		case bool:
+			dst.PutBool(k, val)
+		case []any:
+			s := dst.PutEmptySlice(k)
+			for _, item := range val {
+				pcommonValueFromAny(item, s.AppendEmpty())
+			}
+		case map[string]any:
+			m := dst.PutEmptyMap(k)
+			mapToPCommonMap(val, m)
+		}
+	}
+}
+
+func pcommonValueFromAny(src any, dst pcommon.Value) {
+	switch val := src.(type) {
+	case string:
+		dst.SetStr(val)
+	case int64:
+		dst.SetInt(val)
+	case float64:
+		dst.SetDouble(val)
+	case bool:
+		dst.SetBool(val)
+	}
+}
+
+func hexToTraceID(s string) pcommon.TraceID {
+	if s == "" {
+		return pcommon.TraceID([16]byte{})
+	}
+	b, _ := hex.DecodeString(s)
+	var tid [16]byte
+	copy(tid[:], b)
+	return pcommon.TraceID(tid)
+}
+
+func hexToSpanID(s string) pcommon.SpanID {
+	if s == "" {
+		return pcommon.SpanID([8]byte{})
+	}
+	b, _ := hex.DecodeString(s)
+	var sid [8]byte
+	copy(sid[:], b)
+	return pcommon.SpanID(sid)
 }

@@ -27,21 +27,23 @@ func TestInsertAndQuerySpans(t *testing.T) {
 			TraceID: "trace1", SpanID: "span1", ParentSpanID: "",
 			ServiceName: "svc-a", SpanName: "GET /users", SpanKind: 2,
 			StartTime: 1000000000, EndTime: 1100000000, DurationNs: 100000000,
-			StatusCode: 1, Attributes: map[string]any{"http.method": "GET"},
+			StatusCode: 1, HTTPMethod: "GET", HTTPRoute: "/users",
+			Attributes:         map[string]any{"http.method": "GET", "http.route": "/users"},
 			ResourceAttributes: map[string]any{"service.name": "svc-a"},
 		},
 		{
 			TraceID: "trace1", SpanID: "span2", ParentSpanID: "span1",
 			ServiceName: "svc-b", SpanName: "SELECT users", SpanKind: 3,
 			StartTime: 1010000000, EndTime: 1080000000, DurationNs: 70000000,
-			StatusCode: 1, Attributes: map[string]any{"db.system": "postgresql"},
+			StatusCode: 1, DBSystem: "postgresql", DBOperation: "SELECT",
+			Attributes:         map[string]any{"db.system": "postgresql", "db.operation": "SELECT"},
 			ResourceAttributes: map[string]any{"service.name": "svc-b"},
 		},
 		{
 			TraceID: "trace2", SpanID: "span3", ParentSpanID: "",
 			ServiceName: "svc-a", SpanName: "POST /orders", SpanKind: 2,
 			StartTime: 2000000000, EndTime: 2200000000, DurationNs: 200000000,
-			StatusCode: 2, StatusMessage: "internal error",
+			StatusCode: 2, StatusMessage: "internal error", HTTPMethod: "POST",
 			Attributes:         map[string]any{"http.method": "POST"},
 			ResourceAttributes: map[string]any{"service.name": "svc-a"},
 		},
@@ -80,6 +82,18 @@ func TestInsertAndQuerySpans(t *testing.T) {
 	}
 	if total != 1 {
 		t.Errorf("expected 1 error trace, got %d", total)
+	}
+
+	// QueryTraces - filter by semantic conventions (Advanced)
+	traces, total, err = db.QueryTraces(ctx, TraceFilter{HTTPMethod: "POST", Limit: 50})
+	if err != nil {
+		t.Fatalf("query traces advanced: %v", err)
+	}
+	if total != 1 {
+		t.Errorf("expected 1 trace with POST method, got %d", total)
+	}
+	if traces[0].TraceID != "trace2" {
+		t.Errorf("expected trace2, got %s", traces[0].TraceID)
 	}
 
 	// GetTraceByID
@@ -217,15 +231,16 @@ func TestGetStats(t *testing.T) {
 	db := testDB(t)
 	ctx := context.Background()
 
+	now := time.Now().UnixNano()
 	spans := []Span{
-		{TraceID: "t1", SpanID: "s1", ParentSpanID: "", ServiceName: "svc-a", SpanName: "op1", StartTime: 1000, EndTime: 2000, DurationNs: 100000000, StatusCode: 1, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
-		{TraceID: "t1", SpanID: "s2", ParentSpanID: "s1", ServiceName: "svc-b", SpanName: "op2", StartTime: 1100, EndTime: 1800, DurationNs: 70000000, StatusCode: 1, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
-		{TraceID: "t2", SpanID: "s3", ParentSpanID: "", ServiceName: "svc-a", SpanName: "op3", StartTime: 3000, EndTime: 5000, DurationNs: 200000000, StatusCode: 2, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
+		{TraceID: "t1", SpanID: "s1", ParentSpanID: "", ServiceName: "svc-a", SpanName: "op1", StartTime: now - 1000, EndTime: now, DurationNs: 100000000, StatusCode: 1, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
+		{TraceID: "t1", SpanID: "s2", ParentSpanID: "s1", ServiceName: "svc-b", SpanName: "op2", StartTime: now - 500, EndTime: now, DurationNs: 70000000, StatusCode: 1, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
+		{TraceID: "t2", SpanID: "s3", ParentSpanID: "", ServiceName: "svc-a", SpanName: "op3", StartTime: now - 200, EndTime: now, DurationNs: 200000000, StatusCode: 2, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
 	}
 	db.InsertSpans(ctx, spans)
 
 	logs := []LogRecord{
-		{ServiceName: "svc-a", SeverityNumber: 9, Body: "test", Timestamp: 1000, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
+		{ServiceName: "svc-a", SeverityNumber: 9, Body: "test", Timestamp: now - 1000, Attributes: map[string]any{}, ResourceAttributes: map[string]any{}},
 	}
 	db.InsertLogs(ctx, logs)
 
@@ -332,5 +347,126 @@ func TestMultiDayPartitioning(t *testing.T) {
 
 	if !foundToday || !foundYesterday {
 		t.Errorf("missing traces from partitioning test: today=%v, yesterday=%v", foundToday, foundYesterday)
+	}
+}
+
+func TestInsertAndQueryExemplars(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+
+	now := time.Now()
+	exs := []Exemplar{
+		{
+			MetricName: "http.server.duration",
+			MetricType: "histogram",
+			Timestamp:  now.UnixNano(),
+			Value:      0.15,
+			TraceID:    "trace1",
+			SpanID:     "span1",
+			Attributes: map[string]any{"http.method": "GET"},
+		},
+		{
+			MetricName: "http.server.duration",
+			MetricType: "histogram",
+			Timestamp:  now.Add(-1 * time.Minute).UnixNano(),
+			Value:      0.45,
+			TraceID:    "trace2",
+			SpanID:     "span2",
+			Attributes: map[string]any{"http.method": "POST"},
+		},
+		{
+			MetricName: "other.metric",
+			MetricType: "gauge",
+			Timestamp:  now.UnixNano(),
+			Value:      100,
+			TraceID:    "trace3",
+			SpanID:     "span3",
+		},
+	}
+
+	if err := db.InsertExemplars(ctx, exs); err != nil {
+		t.Fatalf("insert exemplars: %v", err)
+	}
+
+	// 1. Query all
+	res, err := db.QueryExemplars(ctx, ExemplarFilter{Limit: 100})
+	if err != nil {
+		t.Fatalf("query all: %v", err)
+	}
+	if len(res) != 3 {
+		t.Errorf("expected 3 exemplars, got %d", len(res))
+	}
+
+	// 2. Query by name
+	res, err = db.QueryExemplars(ctx, ExemplarFilter{MetricName: "http.server.duration", Limit: 100})
+	if err != nil {
+		t.Fatalf("query by name: %v", err)
+	}
+	if len(res) != 2 {
+		t.Errorf("expected 2 exemplars for http.server.duration, got %d", len(res))
+	}
+
+	// 3. Verify data
+	foundTrace1 := false
+	for _, e := range res {
+		if e.TraceID == "trace1" {
+			foundTrace1 = true
+			if e.Value != 0.15 {
+				t.Errorf("expected value 0.15, got %f", e.Value)
+			}
+			if e.Attributes["http.method"] != "GET" {
+				t.Errorf("expected attr http.method=GET, got %v", e.Attributes["http.method"])
+			}
+		}
+	}
+	if !foundTrace1 {
+		t.Error("trace1 exemplar not found")
+	}
+
+	// 4. Query with time range
+	res, err = db.QueryExemplars(ctx, ExemplarFilter{
+		MetricName: "http.server.duration",
+		StartTime:  now.Add(-30 * time.Second),
+		Limit:      100,
+	})
+	if err != nil {
+		t.Fatalf("query with time: %v", err)
+	}
+	if len(res) != 1 {
+		t.Errorf("expected 1 recent exemplar, got %d", len(res))
+	}
+}
+
+func TestExemplarRetention(t *testing.T) {
+	db := testDB(t)
+	ctx := context.Background()
+
+	now := time.Now()
+	old := now.Add(-10 * 24 * time.Hour) // 10 days ago
+
+	exs := []Exemplar{
+		{MetricName: "m1", MetricType: "gauge", Timestamp: now.UnixNano(), Value: 1, TraceID: "t1", SpanID: "s1"},
+		{MetricName: "m1", MetricType: "gauge", Timestamp: old.UnixNano(), Value: 2, TraceID: "t2", SpanID: "s2"},
+	}
+
+	if err := db.InsertExemplars(ctx, exs); err != nil {
+		t.Fatalf("insert: %v", err)
+	}
+
+	// Retention 7 days
+	deleted, err := db.CleanupExemplars(ctx, 7)
+	if err != nil {
+		t.Fatalf("cleanup: %v", err)
+	}
+	if deleted != 1 {
+		t.Errorf("expected 1 deleted, got %d", deleted)
+	}
+
+	res, _ := db.QueryExemplars(ctx, ExemplarFilter{Limit: 100})
+	if len(res) != 1 {
+		t.Errorf("expected 1 remaining, got %d", len(res))
+	}
+	if res[0].TraceID != "t1" {
+		t.Errorf("expected t1 to remain, got %s", res[0].TraceID)
 	}
 }

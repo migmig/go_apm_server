@@ -33,6 +33,7 @@ A lightweight Application Performance Monitoring (APM) server written in Go. It 
 - [Implementation task history](./tasks.md)
 - [UI fix plan](./ui-fix-setting-plan.md)
 - [UI fix tasks](./ui-fix-setting-tasks.md)
+- [Exporter Guide](./docs/exporter-guide.md)
 
 ## Getting Started
 

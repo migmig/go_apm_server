@@ -2,7 +2,7 @@ import { useEffect, useState, useCallback, useRef } from 'react';
 import client, { type TraceSummary } from '../api/client';
 import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
-import { Search, RefreshCw, Loader2, CalendarDays, X } from 'lucide-react';
+import { Search, RefreshCw, Loader2, CalendarDays, X, ChevronDown, ChevronUp, Filter, Database } from 'lucide-react';
 import { PageEmptyState, PageErrorState, PageLoadingState } from '../components/PageState';
 import { getAsyncViewState, getErrorMessage } from '../lib/request-state';
 import { useWSChannel, useWSMessage } from '../hooks/useWebSocket';
@@ -20,6 +20,15 @@ export default function Traces() {
   const [statusCode, setStatusCode] = useState('');
   const [minDuration, setMinDuration] = useState('');
   const [timePreset, setTimePreset] = useState('');
+  
+  // Advanced filters
+  const [showAdvanced, setShowAdvanced] = useState(false);
+  const [httpMethod, setHttpMethod] = useState('');
+  const [httpRoute, setHttpRoute] = useState('');
+  const [httpStatusCode, setHttpStatusCode] = useState('');
+  const [dbSystem, setDbSystem] = useState('');
+  const [dbOp, setDbOp] = useState('');
+
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
@@ -57,6 +66,11 @@ export default function Traces() {
       };
       if (statusCode) params.status = statusCode;
       if (minDuration) params.min_duration = minDuration;
+      if (httpMethod) params.http_method = httpMethod;
+      if (httpRoute) params.http_route = httpRoute;
+      if (httpStatusCode) params.http_status_code = httpStatusCode;
+      if (dbSystem) params.db_system = dbSystem;
+      if (dbOp) params.db_operation = dbOp;
       
       let computedStart = startParam;
       if (timePreset && !startParam) {
@@ -101,6 +115,11 @@ export default function Traces() {
       };
       if (statusCode) params.status = statusCode;
       if (minDuration) params.min_duration = minDuration;
+      if (httpMethod) params.http_method = httpMethod;
+      if (httpRoute) params.http_route = httpRoute;
+      if (httpStatusCode) params.http_status_code = httpStatusCode;
+      if (dbSystem) params.db_system = dbSystem;
+      if (dbOp) params.db_operation = dbOp;
 
       let computedStart = startParam;
       if (timePreset && !startParam) {
@@ -229,6 +248,17 @@ export default function Traces() {
           </div>
           <div className="h-10 w-px bg-slate-800 hidden md:block"></div>
           <button
+            type="button"
+            onClick={() => setShowAdvanced(!showAdvanced)}
+            className={`flex items-center gap-2 px-3 py-2 text-sm font-medium rounded-lg transition-colors ${
+              showAdvanced ? 'bg-slate-800 text-slate-100' : 'text-slate-400 hover:bg-slate-800/50'
+            }`}
+          >
+            <Filter size={16} />
+            고급 검색
+            {showAdvanced ? <ChevronUp size={14} /> : <ChevronDown size={14} />}
+          </button>
+          <button
             type="submit"
             aria-label="검색 조건으로 조회"
             disabled={loading}
@@ -240,6 +270,69 @@ export default function Traces() {
             </span>
           </button>
         </div>
+
+        {showAdvanced && (
+          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4 pt-4 border-t border-slate-800/50">
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">HTTP Method / Route</label>
+              <div className="flex gap-2">
+                <select
+                  value={httpMethod}
+                  onChange={(e) => setHttpMethod(e.target.value)}
+                  className="w-24 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500/50"
+                >
+                  <option value="">Method</option>
+                  <option value="GET">GET</option>
+                  <option value="POST">POST</option>
+                  <option value="PUT">PUT</option>
+                  <option value="DELETE">DELETE</option>
+                  <option value="PATCH">PATCH</option>
+                </select>
+                <input
+                  type="text"
+                  placeholder="e.g. /api/v1/users"
+                  value={httpRoute}
+                  onChange={(e) => setHttpRoute(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500/50 placeholder-slate-600"
+                />
+              </div>
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider">HTTP Status Code</label>
+              <input
+                type="number"
+                placeholder="e.g. 200, 404, 500"
+                value={httpStatusCode}
+                onChange={(e) => setHttpStatusCode(e.target.value)}
+                className="w-full bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500/50 placeholder-slate-600"
+              />
+            </div>
+
+            <div className="space-y-2">
+              <label className="text-xs font-bold text-slate-500 uppercase tracking-wider flex items-center gap-1.5">
+                <Database size={12} />
+                Database (System / Op)
+              </label>
+              <div className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="e.g. redis, mysql"
+                  value={dbSystem}
+                  onChange={(e) => setDbSystem(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500/50 placeholder-slate-600"
+                />
+                <input
+                  type="text"
+                  placeholder="e.g. get, set, select"
+                  value={dbOp}
+                  onChange={(e) => setDbOp(e.target.value)}
+                  className="flex-1 bg-slate-900 border border-slate-700 rounded-lg px-3 py-2 text-sm text-slate-200 outline-none focus:border-blue-500/50 placeholder-slate-600"
+                />
+              </div>
+            </div>
+          </div>
+        )}
       </form>
 
       {dateLabel && (
