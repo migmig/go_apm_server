@@ -96,7 +96,7 @@ export default function TraceDetail() {
         const rawSpans = res.data.spans || [];
         setSpans(rawSpans);
         if (rawSpans.length > 0) {
-          setSelectedSpan(rawSpans[0]);
+          setSelectedSpan(getPrimaryRootSpan(rawSpans) ?? rawSpans[0]);
         }
       } catch (err) {
         console.error('Failed to fetch trace detail', err);
@@ -186,9 +186,14 @@ export default function TraceDetail() {
   const displayNodes = useMemo(() => {
     if (filterMode === 'all') return flattenedNodes;
     if (filterMode === 'error') return flattenedNodes.filter(n => n.status_code === 2);
-    if (filterMode === 'slow') return flattenedNodes.filter(n => n.duration_ms >= 500);
+    if (filterMode === 'slow') return flattenedNodes.filter(n => getSpanDurationNs(n) >= 500 * NS_PER_MS);
     return flattenedNodes;
   }, [flattenedNodes, filterMode]);
+
+  const selectedSpanMetrics = useMemo(() => {
+    if (!selectedSpan) return null;
+    return getSpanTimelineMetrics(selectedSpan, traceStats.timelineStart, traceStats.timelineDurationNs);
+  }, [selectedSpan, traceStats.timelineDurationNs, traceStats.timelineStart]);
 
   if (loading) return <div className="flex items-center justify-center h-full text-slate-400 animate-pulse font-mono">요청 구조 재구성 중...</div>;
   if (spans.length === 0) return <div className="p-8 text-center text-slate-400">요청 ID <span className="font-mono text-slate-300">{traceId}</span>를 찾을 수 없습니다.</div>;
@@ -283,7 +288,7 @@ export default function TraceDetail() {
               <div className="w-1/3 min-w-[250px] max-w-[400px] shrink-0 border-r border-slate-800 px-2 sticky left-0 z-20 bg-[#0f172a]">서비스 및 작업명</div>
               <div className="flex-1 px-4 flex justify-between">
                 <span>진행 시간표 (Timeline)</span>
-                <span>{(traceStats.totalDuration / 1e6).toFixed(2)} ms</span>
+                <span>{formatDurationNs(traceStats.timelineDurationNs)}</span>
               </div>
             </div>
 
@@ -291,8 +296,7 @@ export default function TraceDetail() {
               {displayNodes.length === 0 ? (
                 <div className="p-8 text-center text-slate-500 text-sm">해당 조건에 일치하는 스팬이 없습니다.</div>
               ) : displayNodes.map((span) => {
-                const left = traceStats.totalDuration > 0 ? ((span.start_time - traceStats.minStart) / traceStats.totalDuration) * 100 : 0;
-                const width = traceStats.totalDuration > 0 ? Math.max(((span.duration_ms * 1e6) / traceStats.totalDuration) * 100, 0.2) : 0.2;
+                const { left, width } = getSpanTimelineMetrics(span, traceStats.timelineStart, traceStats.timelineDurationNs);
                 const isSelected = selectedSpan?.span_id === span.span_id;
                 const hasError = span.status_code === 2;
                 const isHeavy = width > 30;
@@ -346,7 +350,7 @@ export default function TraceDetail() {
                       >
                         {/* Duration label inside or outside based on width */}
                         <span className={`absolute whitespace-nowrap text-[10px] font-bold font-mono ${width > 15 ? 'left-2 text-white' : 'left-full ml-3 text-slate-400'}`}>
-                          {span.duration_ms.toFixed(2)} ms
+                          {formatDurationNs(getSpanDurationNs(span))}
                         </span>
                       </div>
                     </div>
@@ -387,6 +391,24 @@ export default function TraceDetail() {
                     <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">수행 작업</p>
                     <p className="text-sm font-bold text-blue-400 font-mono">{selectedSpan.span_name}</p>
                   </div>
+                  {selectedSpanMetrics && (
+                    <div className="grid grid-cols-1 gap-3 md:grid-cols-3">
+                      <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">시작 오프셋</p>
+                        <p className="text-sm font-bold text-slate-200 font-mono">{formatDurationNs(selectedSpanMetrics.startOffsetNs)}</p>
+                      </div>
+                      <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">실행 시간</p>
+                        <p className="text-sm font-bold text-slate-200 font-mono">{formatDurationNs(selectedSpanMetrics.spanDurationNs)}</p>
+                      </div>
+                      <div className="bg-slate-900/80 p-3 rounded-lg border border-slate-800">
+                        <p className="text-[10px] text-slate-400 font-bold uppercase mb-1">관측 종료</p>
+                        <p className="text-sm font-bold text-slate-200 font-mono">
+                          {formatDurationNs(selectedSpanMetrics.startOffsetNs + selectedSpanMetrics.spanDurationNs)}
+                        </p>
+                      </div>
+                    </div>
+                  )}
                 </div>
               </section>
 
