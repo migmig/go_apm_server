@@ -24,6 +24,49 @@ interface SpanNode extends Span {
   depth: number;
 }
 
+const NS_PER_MS = 1e6;
+const MIN_TIMELINE_DURATION_NS = 1;
+const MIN_BAR_WIDTH_PERCENT = 0.2;
+
+function getSpanDurationNs(span: Span) {
+  const reportedDurationNs =
+    Number.isFinite(span.duration_ms) && span.duration_ms > 0
+      ? Math.round(span.duration_ms * NS_PER_MS)
+      : 0;
+  const observedDurationNs = span.end_time > span.start_time ? span.end_time - span.start_time : 0;
+
+  return Math.max(reportedDurationNs, observedDurationNs, 0);
+}
+
+function formatDurationNs(durationNs: number) {
+  return `${(durationNs / NS_PER_MS).toFixed(2)} ms`;
+}
+
+function getPrimaryRootSpan(spans: Span[]) {
+  const roots = spans.filter(span => !span.parent_span_id);
+  if (roots.length === 0) return null;
+
+  return [...roots].sort((a, b) => {
+    const durationDiff = getSpanDurationNs(b) - getSpanDurationNs(a);
+    if (durationDiff !== 0) return durationDiff;
+    return a.start_time - b.start_time;
+  })[0];
+}
+
+function getSpanTimelineMetrics(span: Span, timelineStart: number, timelineDurationNs: number) {
+  const spanDurationNs = getSpanDurationNs(span);
+  const safeTimelineDurationNs = Math.max(timelineDurationNs, MIN_TIMELINE_DURATION_NS);
+  const clampedStartNs = Math.min(Math.max(span.start_time - timelineStart, 0), safeTimelineDurationNs);
+  const visibleDurationNs = Math.min(spanDurationNs, Math.max(safeTimelineDurationNs - clampedStartNs, 0));
+  const left = (clampedStartNs / safeTimelineDurationNs) * 100;
+  const width =
+    spanDurationNs > 0
+      ? Math.max((visibleDurationNs / safeTimelineDurationNs) * 100, MIN_BAR_WIDTH_PERCENT)
+      : MIN_BAR_WIDTH_PERCENT;
+
+  return { left, width, spanDurationNs, startOffsetNs: clampedStartNs };
+}
+
 
 
 export default function TraceDetail() {
@@ -98,17 +141,47 @@ export default function TraceDetail() {
   }, [spans]);
 
   const traceStats = useMemo(() => {
-    if (spans.length === 0) return { minStart: 0, maxEnd: 0, totalDuration: 0 };
-    const minStart = Math.min(...spans.map(s => s.start_time));
-    const maxEnd = Math.max(...spans.map(s => s.end_time));
-    return { minStart, maxEnd, totalDuration: maxEnd - minStart };
+    if (spans.length === 0) {
+      return {
+        timelineStart: 0,
+        timelineDurationNs: 0,
+        envelopeDurationNs: 0,
+        requestDurationNs: 0,
+        primaryRootSpanId: null as string | null,
+      };
+    }
+
+    const primaryRoot = getPrimaryRootSpan(spans);
+    const timelineStart = Math.min(...spans.map(s => s.start_time));
+    const timelineEnd = Math.max(...spans.map(s => Math.max(s.end_time, s.start_time + getSpanDurationNs(s))));
+    const envelopeDurationNs = Math.max(timelineEnd - timelineStart, 0);
+    const requestDurationNs = primaryRoot ? getSpanDurationNs(primaryRoot) : envelopeDurationNs;
+
+    return {
+      timelineStart,
+      timelineDurationNs: Math.max(envelopeDurationNs, requestDurationNs, MIN_TIMELINE_DURATION_NS),
+      envelopeDurationNs,
+      requestDurationNs,
+      primaryRootSpanId: primaryRoot?.span_id ?? null,
+    };
   }, [spans]);
 
   const incidentSummary = useMemo(() => {
     const errors = spans.filter(s => s.status_code === 2);
-    const top3Slowest = [...spans].sort((a, b) => b.duration_ms - a.duration_ms).slice(0, 3);
-    return { errorCount: errors.length, top3Slowest };
-  }, [spans]);
+    const bottleneckCandidates =
+      traceStats.primaryRootSpanId && spans.length > 1
+        ? spans.filter(s => s.span_id !== traceStats.primaryRootSpanId)
+        : spans;
+    const top3Slowest = [...bottleneckCandidates]
+      .sort((a, b) => getSpanDurationNs(b) - getSpanDurationNs(a))
+      .slice(0, 3);
+
+    return {
+      errorCount: errors.length,
+      top3Slowest,
+      excludesPrimaryRoot: bottleneckCandidates.length !== spans.length,
+    };
+  }, [spans, traceStats.primaryRootSpanId]);
 
   const displayNodes = useMemo(() => {
     if (filterMode === 'all') return flattenedNodes;
@@ -138,7 +211,10 @@ export default function TraceDetail() {
             </div>
             <div className="mt-2 flex flex-col gap-2 text-xs font-bold uppercase tracking-wider text-slate-400 sm:flex-row sm:items-center sm:space-x-4">
               <span className="flex items-center"><Layers size={12} className="mr-1.5 text-blue-500" /> {spans.length} 개의 작업</span>
-              <span className="flex items-center"><Clock size={12} className="mr-1.5 text-blue-500" /> 총 소요 시간: {(traceStats.totalDuration / 1e6).toFixed(2)}ms</span>
+              <span className="flex items-center"><Clock size={12} className="mr-1.5 text-blue-500" /> 요청 소요 시간: {formatDurationNs(traceStats.requestDurationNs)}</span>
+              {traceStats.envelopeDurationNs - traceStats.requestDurationNs > NS_PER_MS && (
+                <span className="flex items-center text-slate-500">전체 관측 범위: {formatDurationNs(traceStats.envelopeDurationNs)}</span>
+              )}
             </div>
           </div>
         </div>
@@ -172,14 +248,16 @@ export default function TraceDetail() {
               <Zap size={20} />
             </div>
             <div>
-              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">가장 느린 작업 Top 3</p>
+              <p className="text-xs font-bold uppercase tracking-widest text-slate-500">
+                가장 느린 작업 Top 3{incidentSummary.excludesPrimaryRoot ? ' (루트 제외)' : ''}
+              </p>
               <div className="mt-1 flex flex-col gap-0.5 text-xs text-slate-300">
                 {incidentSummary.top3Slowest.map((span, idx) => (
                   <div key={idx} className="flex items-center gap-2 cursor-pointer hover:text-white" onClick={() => setSelectedSpan(span)}>
                     <span className="w-4 h-4 rounded bg-slate-800 flex items-center justify-center text-[10px] text-slate-500">{idx + 1}</span>
                     <span className={`truncate max-w-[120px] ${getServiceColor(span.service_name).replace('bg-', 'text-')}`}>{span.service_name}</span>
                     <ArrowDown size={10} className="text-slate-600" />
-                    <span className="font-mono text-amber-400/80">{span.duration_ms.toFixed(2)}ms</span>
+                    <span className="font-mono text-amber-400/80">{formatDurationNs(getSpanDurationNs(span))}</span>
                   </div>
                 ))}
               </div>
