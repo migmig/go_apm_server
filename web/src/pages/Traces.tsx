@@ -31,9 +31,11 @@ export default function Traces() {
 
   const [offset, setOffset] = useState(0);
   const [hasMore, setHasMore] = useState(true);
+  const [refreshing, setRefreshing] = useState(false);
   const [errorMessage, setErrorMessage] = useState<string | null>(null);
   const [lastUpdatedAt, setLastUpdatedAt] = useState<Date | null>(null);
   const observer = useRef<IntersectionObserver | null>(null);
+  const hasExistingDataRef = useRef(false);
 
   useWSChannel('traces');
 
@@ -45,6 +47,11 @@ export default function Traces() {
     setLastUpdatedAt(new Date());
   }, []));
 
+  // 기존 데이터 존재 여부를 ref로 추적 (fetchTraces deps 불필요하게 변경 방지)
+  useEffect(() => {
+    hasExistingDataRef.current = traces.length > 0;
+  }, [traces.length]);
+
   const startParam = searchParams.get('start');
   const endParam = searchParams.get('end');
   const dateLabel = searchParams.get('date');
@@ -54,7 +61,12 @@ export default function Traces() {
   };
 
   const fetchTraces = useCallback(async () => {
-    setLoading(true);
+    const isRefresh = hasExistingDataRef.current;
+    if (isRefresh) {
+      setRefreshing(true);
+    } else {
+      setLoading(true);
+    }
     setOffset(0);
     setHasMore(true);
 
@@ -71,17 +83,16 @@ export default function Traces() {
       if (httpStatusCode) params.http_status_code = httpStatusCode;
       if (dbSystem) params.db_system = dbSystem;
       if (dbOp) params.db_operation = dbOp;
-      
+
       let computedStart = startParam;
       if (timePreset && !startParam) {
-         // handle preset
          const now = Date.now();
          if (timePreset === '5m') computedStart = String(now - 5 * 60 * 1000);
          else if (timePreset === '15m') computedStart = String(now - 15 * 60 * 1000);
          else if (timePreset === '1h') computedStart = String(now - 60 * 60 * 1000);
          else if (timePreset === '24h') computedStart = String(now - 24 * 60 * 60 * 1000);
       }
-      
+
       if (computedStart) params.start = computedStart;
       if (endParam) params.end = endParam;
 
@@ -93,11 +104,17 @@ export default function Traces() {
       setLastUpdatedAt(new Date());
     } catch (err) {
       console.error('Failed to fetch traces', err);
-      setErrorMessage(getErrorMessage(err, '요청 목록을 불러오지 못했습니다. API 서버 연결을 확인해 주세요.'));
+      const msg = getErrorMessage(err, '요청 목록을 불러오지 못했습니다. API 서버 연결을 확인해 주세요.');
+      if (isRefresh) {
+        toast.error(msg, { id: 'traces-fetch' });
+      } else {
+        setErrorMessage(msg);
+      }
     } finally {
       setLoading(false);
+      setRefreshing(false);
     }
-  }, [serviceName, startParam, endParam]);
+  }, [serviceName, startParam, endParam, statusCode, minDuration, httpMethod, httpRoute, httpStatusCode, dbSystem, dbOp, timePreset]);
 
   const loadMore = useCallback(async () => {
     if (loadingMore || !hasMore) {
@@ -151,7 +168,7 @@ export default function Traces() {
     } finally {
       setLoadingMore(false);
     }
-  }, [hasMore, loadingMore, offset, serviceName, startParam, endParam]);
+  }, [hasMore, loadingMore, offset, serviceName, startParam, endParam, statusCode, minDuration, httpMethod, httpRoute, httpStatusCode, dbSystem, dbOp, timePreset]);
 
   const lastElementRef = useCallback((node: HTMLDivElement | null) => {
     if (loading || loadingMore) return;
@@ -261,11 +278,11 @@ export default function Traces() {
           <button
             type="submit"
             aria-label="검색 조건으로 조회"
-            disabled={loading}
-            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-lg shadow-blue-500/20 transition-all active:scale-95"
+            disabled={loading || refreshing}
+            className="bg-blue-600 hover:bg-blue-500 text-white px-6 py-2.5 rounded-lg text-sm font-semibold shadow-lg shadow-blue-500/20 transition-all active:scale-95 disabled:opacity-70"
           >
             <span className="inline-flex items-center">
-              <RefreshCw size={16} className={loading ? 'mr-2 animate-spin' : 'mr-2'} />
+              <RefreshCw size={16} className={(loading || refreshing) ? 'mr-2 animate-spin' : 'mr-2'} />
               조회하기
             </span>
           </button>
